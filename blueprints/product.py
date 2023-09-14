@@ -13,16 +13,16 @@ def product_index () :
 
         if products :
             products_list = [
-                product.as_dict() for product in products
+                product.as_dict() for product in products # .as_dict() formats product
             ]
-            
+        
             return jsonify({
                 'products': products_list
-            })
+            }), 200
         else :
             return jsonify({
                 'error': 'Products not found'
-            })
+            }), 404
     except Exception as error :
         current_app.logger.error(f'Error fetching products: {str(error)}')
         return jsonify({
@@ -45,7 +45,7 @@ def create_product () :
 
         return jsonify({
             'message' : 'Product created successfully'
-        })
+        }), 201
     except Exception as error :
         current_app.logger.error(f'Error creating product: {str(error)}')
         return jsonify({
@@ -62,7 +62,7 @@ def product_show (id) :
 
             return jsonify({
                 'product': product_detail
-            })
+            }), 200
         else :
             return jsonify({
                 'error': 'Product not found'
