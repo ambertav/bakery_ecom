@@ -1,6 +1,6 @@
 from .app import db
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey
 from enum import Enum
 
 
@@ -60,3 +60,18 @@ class User (db.Model) :
         self.shipping_address = shipping_address
         self.role = role
         self.created_at = created_at
+
+
+# Cart_item
+class Cart_Item (db.Model) :
+    __tablename__ = 'cart_items'
+
+    id = db.Column(db.Integer, primary_key = True)
+    user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable = False)
+    product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
+    quantity = db.Column(db.Integer(), nullable = False)
+
+    def __init__ (self, user_id, product_id, quantity) :
+        self.user_id = user_id
+        self.product_id = product_id
+        self.quantity = quantity
