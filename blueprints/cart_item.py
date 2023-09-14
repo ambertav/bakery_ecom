@@ -5,6 +5,30 @@ from ..models import User, Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
 
+@cart_item_bp.route('/', methods = ['GET'])
+def view_cart() :
+    try :
+        cart_items = Cart_Item.query.filter_by(user_id = 1).all() # needs user auth
+
+        if cart_items :
+            shopping_cart = [
+                item.as_dict() for item in cart_items
+            ]
+        else :
+            return jsonify({
+                'error': 'Shopping cart not found'
+            }), 404
+        
+        return jsonify({
+            'shopping_cart': shopping_cart
+        }), 200
+        
+    except Exception as error :
+        current_app.logger.error(f'Error fetching shopping cart: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
 @cart_item_bp.route('/add', methods = ['POST'])
 def add_to_cart () :
     try :
@@ -15,7 +39,7 @@ def add_to_cart () :
         if not product :
             return jsonify({
                 'error': 'Product not found'
-            })
+            }), 404
 
         # get user id, NEEDS AUTH
         user_id = 1
