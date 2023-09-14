@@ -21,3 +21,13 @@ class Product (db.Model) :
         self.image = image
         self.price = price
         self.stock = stock
+    
+    def as_dict (self) : 
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'image': self.image,
+            'price': self.price,
+            'stock': self.stock
+        }

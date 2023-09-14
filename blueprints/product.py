@@ -7,8 +7,16 @@ product_bp = Blueprint('product', __name__)
 
 
 @product_bp.route('/')
-def index () :
-    return 'Hello from products!'
+def product_index () :
+    products = Product.query.all()
+
+    products_list = [
+        product.as_dict() for product in products
+    ]
+    
+    return jsonify({
+        'products': products_list
+    })
 
 @product_bp.route('/create', methods = ['POST'])
 def create_product () :
