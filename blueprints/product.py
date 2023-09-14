@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, request, current_app
 
 from ..app import db
 from ..models import Product
@@ -10,21 +10,16 @@ product_bp = Blueprint('product', __name__)
 def index () :
     return 'Hello from products!'
 
-@product_bp.route('/test')
-def test () :
-    return 'testing from products!'
-
-
-@product_bp.route('/create')
+@product_bp.route('/create', methods = ['POST'])
 def create_product () :
     try :
-        new_product = Product(
-            name = 'another test',
-            description = 'testing...',
-            image = 'test.url',
-            price = 999.99,
-            stock = 1,
-        )
+        data = request.get_json()
+
+        product_data = {
+            key: data.get(key) for key in ['name', 'description', 'image', 'price', 'stock']
+        }
+
+        new_product = Product(**product_data)
 
         db.session.add(new_product)
         db.session.commit()
