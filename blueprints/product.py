@@ -6,17 +6,28 @@ from ..models import Product
 product_bp = Blueprint('product', __name__)
 
 
-@product_bp.route('/')
+@product_bp.route('/', methods = ['GET'])
 def product_index () :
-    products = Product.query.all()
+    try :
+        products = Product.query.all()
 
-    products_list = [
-        product.as_dict() for product in products
-    ]
-    
-    return jsonify({
-        'products': products_list
-    })
+        if products :
+            products_list = [
+                product.as_dict() for product in products
+            ]
+            
+            return jsonify({
+                'products': products_list
+            })
+        else :
+            return jsonify({
+                'error': 'Products not found'
+            })
+    except Exception as error :
+        current_app.logger.error(f'Error fetching products: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 @product_bp.route('/create', methods = ['POST'])
 def create_product () :
@@ -37,6 +48,27 @@ def create_product () :
         })
     except Exception as error :
         current_app.logger.error(f'Error creating product: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+@product_bp.route('/<int:id>', methods = ['GET'])
+def product_show (id) :
+    try :
+        product = Product.query.get(id)
+
+        if product :
+            product_detail = product.as_dict()
+
+            return jsonify({
+                'product': product_detail
+            })
+        else :
+            return jsonify({
+                'error': 'Product not found'
+            }), 404
+    except Exception as error :
+        current_app.logger.error(f'Error fetching product: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
