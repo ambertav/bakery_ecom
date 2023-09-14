@@ -71,7 +71,21 @@ class Cart_Item (db.Model) :
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
     quantity = db.Column(db.Integer(), nullable = False)
 
+    # define relationships
+    user = db.relationship('User', backref = 'cart_items')
+    product = db.relationship('Product', backref = 'cart_items')
+
     def __init__ (self, user_id, product_id, quantity) :
         self.user_id = user_id
         self.product_id = product_id
         self.quantity = quantity
+
+    def as_dict (self) :
+        return {
+            'id': self.id,
+            'product_id': self.product.id,
+            'name': self.product.name,
+            'image': self.product.image,
+            'price': self.product.price,
+            'quantity': self.quantity
+        }
