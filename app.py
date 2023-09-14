@@ -15,7 +15,9 @@ migrate = Migrate(app, db)
 
 
 from .blueprints.product import product_bp
-app.register_blueprint(product_bp, url_prefix = '/products')
+from .blueprints.user import user_bp
+app.register_blueprint(product_bp, url_prefix = '/product')
+app.register_blueprint(user_bp, url_prefix = '/user')
 
 
 @app.route('/')
