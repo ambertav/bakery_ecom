@@ -5,6 +5,7 @@ from ..models import User, Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
 
+# index
 @cart_item_bp.route('/', methods = ['GET'])
 def view_cart() :
     try :
@@ -29,6 +30,44 @@ def view_cart() :
             'error': 'Internal server error'
         }), 500
 
+# delete
+@cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
+def delete_cart_item () :
+    try :
+        pass
+    except Exception as error :
+        pass
+
+# update
+@cart_item_bp.route('/<int:id>/update', methods = ['PUT'])
+def update_quantity (id) :
+    try :
+        data = request.get_json()
+        new_quantity = data.get('quantity')
+
+        cart_item = Cart_Item.query.get(id)
+        
+        if not cart_item :
+            return jsonify({
+                'error': 'Item not found in cart'
+            }), 404
+        else :
+            if new_quantity == 0 :
+                db.session.delete(cart_item)
+            else :
+                cart_item.quantity = new_quantity
+                db.session.commit()
+                return jsonify({
+                    'message': 'Item quantity updated successfully'
+                }), 200
+            
+    except Exception as error :
+        current_app.logger.error(f'Error updating item in cart: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
+# create
 @cart_item_bp.route('/add', methods = ['POST'])
 def add_to_cart () :
     try :
