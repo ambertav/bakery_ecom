@@ -32,11 +32,26 @@ def view_cart() :
 
 # delete
 @cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
-def delete_cart_item () :
+def delete_cart_item (id) :
     try :
-        pass
+        cart_item = Cart_Item.query.get(id)
+
+        if not cart_item :
+            return jsonify({
+                'error': 'Item not found in cart'
+            }), 404
+        
+        db.session.delete(cart_item)
+        db.session.commit()
+        return jsonify({
+            'message': ' Item deleted from cart successfully'
+        }), 200
+
     except Exception as error :
-        pass
+        current_app.logger.error(f'Error deleting item from cart: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 # update
 @cart_item_bp.route('/<int:id>/update', methods = ['PUT'])
@@ -56,10 +71,11 @@ def update_quantity (id) :
                 db.session.delete(cart_item)
             else :
                 cart_item.quantity = new_quantity
-                db.session.commit()
-                return jsonify({
-                    'message': 'Item quantity updated successfully'
-                }), 200
+
+            db.session.commit()
+            return jsonify({
+                'message': 'Item quantity updated successfully'
+            }), 200
             
     except Exception as error :
         current_app.logger.error(f'Error updating item in cart: {str(error)}')
