@@ -9,7 +9,28 @@ order_bp = Blueprint('order', __name__)
 
 @order_bp.route('/', methods = ['GET'])
 def order_history_index () :
-    pass
+    try :
+        orders = Order.query.filter_by(user_id = 1).all()
+
+        if orders :
+            order_history = [
+                order.as_dict() for order in orders
+            ]
+        else :
+            return jsonify({
+                'error': 'Orders not found'
+            }), 404
+        
+        return jsonify({
+            'order_history': order_history
+        }), 200
+
+
+    except Exception as error :
+        current_app.logger.error(f'Error fetching orders: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 @order_bp.route('/create', methods = ['POST'])
 def create_order () :
