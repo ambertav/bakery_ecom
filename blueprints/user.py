@@ -7,12 +7,14 @@ from ..app import db
 from ..models import User, Role
 
 from .cart_item import cart_item_bp
+from .order import order_bp
 
 bcrypt = Bcrypt()
 
 user_bp = Blueprint('user', __name__)
 
 user_bp.register_blueprint(cart_item_bp, url_prefix = '/cart')
+user_bp.register_blueprint(order_bp, url_prefix = '/order')
 
 @user_bp.route('/signup', methods = ['POST'])
 def signup () :
