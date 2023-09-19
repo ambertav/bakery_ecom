@@ -1,6 +1,6 @@
 from .app import db
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey
 from enum import Enum
 
 # Product
@@ -34,8 +34,8 @@ class Product (db.Model) :
 
 # enum for user role
 class Role (Enum) :
-    CLIENT = 1
-    ADMIN = 2
+    CLIENT = 'CLIENT'
+    ADMIN = 'ADMIN'
 
 # User
 class User (db.Model) :
@@ -47,7 +47,7 @@ class User (db.Model) :
     password = db.Column(db.String(100), nullable = False)
     billing_address = db.Column(db.Text(), nullable = False)
     shipping_address = db.Column(db.Text(), nullable = True) # nullable for shipping same as billing option
-    role = db.Column(db.Enum(Role), default = 1, nullable = False)
+    role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
     def __init__ (self, name, email, password, billing_address, shipping_address, role, created_at) :
@@ -68,15 +68,17 @@ class Cart_Item (db.Model) :
     user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable = False)
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
     quantity = db.Column(db.Integer(), nullable = False)
+    ordered = db.Column(db.Boolean(), default = False, nullable = False)
 
     # define relationships
     user = db.relationship('User', backref = 'cart_items')
     product = db.relationship('Product', backref = 'cart_items')
 
-    def __init__ (self, user_id, product_id, quantity) :
+    def __init__ (self, user_id, product_id, quantity, ordered) :
         self.user_id = user_id
         self.product_id = product_id
         self.quantity = quantity
+        self.ordered = ordered
 
     def as_dict (self) :
         return {
@@ -90,26 +92,26 @@ class Cart_Item (db.Model) :
     
 # enums for order model
 class Order_Status (Enum) :
-    PENDING = 1
-    PROCESSING = 2
-    SHIPPED = 3
-    DELIVERED = 4
-    CANCELLED = 5
+    PENDING = 'PENDING'
+    PROCESSING = 'PROCESSING'
+    SHIPPED = 'SHIPPED'
+    DELIVERED = 'DELIVERED'
+    CANCELLED = 'CANCELLED'
 
 class Ship_Method (Enum) :
-    STANDARD = 1
-    EXPRESS = 2
-    NEXT_DAY = 3
+    STANDARD = 'STANDARD'
+    EXPRESS = 'EXPRESS'
+    NEXT_DAY = 'NEXT_DAY'
 
 class Pay_Method (Enum) :
-    CREDIT_CARD = 1
-    PAYPAL = 2
-    CASH = 3
+    CREDIT_CARD = 'CREDIT_CARD'
+    PAYPAL = 'PAYPAL'
+    CASH = 'CASH'
 
 class Pay_Status (Enum) :
-    PENDING = 1
-    COMPLETED = 2
-    FAILED = 3
+    PENDING = 'PENDING'
+    COMPLETED = 'COMPLETED'
+    FAILED = 'FAILED'
 
 # order and cart_items assocation table
 order_cart_items = db.Table(
@@ -126,21 +128,19 @@ class Order (db.Model) :
     user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable = False)
     total_price = db.Column(db.Numeric(precision = 10, scale = 2), nullable = False)
     date = db.Column(db.TIMESTAMP(), nullable = False)
-    status = db.Column(db.Enum(Order_Status), default = 1, nullable = False)
+    status = db.Column(db.Enum(Order_Status), nullable = False)
     shipping_method = db.Column(db.Enum(Ship_Method), nullable = False)
     payment_method = db.Column(db.Enum(Pay_Method), nullable = False)
-    payment_status = db.Column(db.Enum(Pay_Status), default = 1, nullable = False)
+    payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
     
     user = db.relationship('User', backref = 'orders')
     items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders')
 
-    def __init__ (self, user_id, date, status, shipping_method, payment_method, payment_status) :
+    def __init__ (self, user_id, date, total_price, status, shipping_method, payment_method, payment_status) :
         self.user_id = user_id
         self.date = date
+        self.total_price = total_price
         self.status = status
         self.shipping_method = shipping_method
         self.payment_method = payment_method
         self.payment_status = payment_status
-
-    def total_price (self) :
-        return sum(cart_item.product.price * cart_item.quantity for cart_item in self.items)
