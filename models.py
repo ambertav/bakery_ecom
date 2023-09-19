@@ -45,7 +45,7 @@ class User (db.Model) :
     name = db.Column(db.String(30), nullable = False)
     email = db.Column(db.String(320), unique = True, nullable = False)
     password = db.Column(db.String(100), nullable = False)
-    billing_address = db.Column(db.Text(), nullable = False)
+    billing_address = db.Column(db.Text(), nullable = True)
     shipping_address = db.Column(db.Text(), nullable = True) # nullable for shipping same as billing option
     role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
