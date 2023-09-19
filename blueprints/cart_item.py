@@ -99,7 +99,7 @@ def add_to_cart () :
         # get user id, NEEDS AUTH
         user_id = 1
 
-        new_item = Cart_Item(user_id = user_id, product_id = product.id, quantity = data.get('quantity'))
+        new_item = Cart_Item(user_id = user_id, product_id = product.id, quantity = data.get('quantity'), ordered = False)
 
         db.session.add(new_item)
         db.session.commit()
