@@ -144,3 +144,15 @@ class Order (db.Model) :
         self.shipping_method = shipping_method
         self.payment_method = payment_method
         self.payment_status = payment_status
+
+    def as_dict (self) :
+        return {
+            'id': self.id,
+            'user_id': self.user.id,
+            'total_price': self.total_price,
+            'date': self.date,
+            'status': self.status.value,
+            'shipping_method': self.shipping_method.value, 
+            'payment_method': self.payment_method.value, 
+            'payment_status': self.payment_status.value  
+        }
