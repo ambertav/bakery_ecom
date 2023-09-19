@@ -75,5 +75,26 @@ def create_order () :
 
 
 @order_bp.route('/<int:id>', methods = ['GET'])
-def show_order () :
-    pass
+def show_order (id) :
+    try :
+        order = Order.query.get(id)
+
+        if order :
+            order_detail = order.as_dict()
+            cart_items = order.items
+            cart_item_details = [item.as_dict() for item in cart_items]
+            order_detail['items'] = cart_item_details
+
+            return jsonify({
+                'order': order_detail
+            }), 200
+        else :
+            return jsonify({
+                'error': 'Order not found'
+            }), 404
+
+    except Exception as error :
+        current_app.logger.error(f'Error fetching order details: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
