@@ -1,15 +1,13 @@
 from flask import Blueprint, jsonify, request, current_app
-from flask_bcrypt import Bcrypt
+from flask_cors import cross_origin
 import datetime
 
 
-from ..app import db
+from ..app import db, auth
 from ..models import User, Role
 
 from .cart_item import cart_item_bp
 from .order import order_bp
-
-bcrypt = Bcrypt()
 
 user_bp = Blueprint('user', __name__)
 
@@ -17,24 +15,23 @@ user_bp.register_blueprint(cart_item_bp, url_prefix = '/cart')
 user_bp.register_blueprint(order_bp, url_prefix = '/order')
 
 @user_bp.route('/signup', methods = ['POST'])
+@cross_origin()
 def signup () :
     try :
-        data = request.get_json()
+        # retrieve token
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        # decode to retrieve uid
+        decoded_token = auth.verify_id_token(token)
+        uid = decoded_token['uid']
 
-        user_data = {
-                key: data.get(key) for key in ['name', 'email', 'password', 'billing_address', 'shipping_address']
-        }
+        print(request.data)
 
-        existing_user = User.query.filter_by(email = user_data['email']).first()
-        if existing_user :
-            return jsonify({
-                'message': 'Email address is already in use'
-            }), 400
-        
-        # hash password with bcrypt
-        hashed_password = bcrypt.generate_password_hash(user_data['password']).decode('utf-8')
-        user_data['password'] = hashed_password
-
+        user_data = {}
+        # assign all fields for user creation
+        user_data['name'] = request.data
+        user_data['firebase_uid'] = uid
+        user_data['billing_address'] = None
+        user_data['shipping_address'] = None
         user_data['role'] = Role.CLIENT
         user_data['created_at'] = datetime.datetime.utcnow()
 
@@ -42,6 +39,7 @@ def signup () :
 
         db.session.add(new_user)
         db.session.commit()
+
         return jsonify({
             'message': 'User registered successfully'
         }), 201
@@ -51,6 +49,3 @@ def signup () :
         return jsonify({
             'error': 'Internal server error'
         }), 500
-
-    
-
