@@ -43,17 +43,15 @@ class User (db.Model) :
 
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(30), nullable = False)
-    email = db.Column(db.String(320), unique = True, nullable = False)
-    password = db.Column(db.String(100), nullable = False)
-    billing_address = db.Column(db.Text(), nullable = True)
+    firebase_uid = db.Column(db.String(128), nullable = False)
+    billing_address = db.Column(db.Text(), nullable = True) # nullable on signup
     shipping_address = db.Column(db.Text(), nullable = True) # nullable for shipping same as billing option
     role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
-    def __init__ (self, name, email, password, billing_address, shipping_address, role, created_at) :
+    def __init__ (self, name, firebase_uid, billing_address, shipping_address, role, created_at) :
         self.name = name
-        self.email = email
-        self.password = password
+        self.firebase_uid = firebase_uid
         self.billing_address = billing_address
         self.shipping_address = shipping_address
         self.role = role
