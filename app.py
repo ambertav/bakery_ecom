@@ -1,9 +1,11 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_cors import CORS
 from sqlalchemy import text
 from dotenv import load_dotenv
-import pyrebase
+import firebase_admin
+from firebase_admin import auth, credentials
 import os
 
 load_dotenv()
@@ -13,19 +15,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.getenv('DB_USER')}:{o
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 
-firebase_config = {
-    'apiKey': os.getenv('FIREBASE_API_KEY'),
-    'authDomain': "bakery-434c0.firebaseapp.com",
-    'projectId': "bakery-434c0",
-    'storageBucket': "bakery-434c0.appspot.com",
-    'messagingSenderId': "289170495122",
-    'appId': "1:289170495122:web:f0b390461c25223041784b",
-    'measurementId': "G-B3JJH6BLBW"
-}
+cred = credentials.Certificate('/Users/ambertaveras/projects-seirfx/bakery_ecom/backend/bakery-434c0-firebase-adminsdk-6ava5-1a23618776.json')
+firebase_admin.initialize_app(cred)
 
-firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
-
+CORS(app, supports_credentials = True)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -35,6 +28,15 @@ from .blueprints.user import user_bp
 app.register_blueprint(product_bp, url_prefix = '/product')
 app.register_blueprint(user_bp, url_prefix = '/user')
 
+@app.after_request
+def after_request(response) :
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    
+    return response
 
 @app.route('/')
 def home () :
