@@ -12,8 +12,9 @@ def product_index () :
         products = Product.query.all()
 
         if products :
+            # list of products in stock
             products_list = [
-                product.as_dict() for product in products # .as_dict() formats product
+                product.as_dict() for product in products if product.stock > 0 # .as_dict() formats product
             ]
         
             return jsonify({
@@ -23,6 +24,7 @@ def product_index () :
             return jsonify({
                 'error': 'Products not found'
             }), 404
+        
     except Exception as error :
         current_app.logger.error(f'Error fetching products: {str(error)}')
         return jsonify({
