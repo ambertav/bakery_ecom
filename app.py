@@ -18,7 +18,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 cred = credentials.Certificate('/Users/ambertaveras/projects-seirfx/bakery_ecom/backend/bakery-434c0-firebase-adminsdk-6ava5-1a23618776.json')
 firebase_admin.initialize_app(cred)
 
-CORS(app, supports_credentials = True)
+CORS(app, supports_credentials = True, origins='http://localhost:3000')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -33,9 +33,7 @@ def after_request(response) :
     response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    
     response.headers['Access-Control-Allow-Credentials'] = 'true'
-    
     return response
 
 @app.route('/')
