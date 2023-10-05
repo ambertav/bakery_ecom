@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 
-from ..app import db
+from ..app import db, auth
 from ..models import User, Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
@@ -89,17 +89,28 @@ def add_to_cart () :
     try :
         data = request.get_json()
 
-        product = Product.query.get(data.get('product_id'))
+        # retrieve token
+        token = request.headers['Authorization'].replace('Bearer ', '')
+
+        product = Product.query.get(data.get('id'))
 
         if not product :
             return jsonify({
                 'error': 'Product not found'
             }), 404
+        
 
-        # get user id, NEEDS AUTH
-        user_id = 1
-
-        new_item = Cart_Item(user_id = user_id, product_id = product.id, quantity = data.get('quantity'), ordered = False)
+        # retrieve and authenticate user
+        try :
+            user = auth_user(token)
+        except Exception as error :
+            current_app.logger.error(f'Error authenticating user: {str(error)}')
+            return jsonify({
+                'error': 'Internal server error'
+            }), 500
+        
+        
+        new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = 1, ordered = False)
 
         db.session.add(new_item)
         db.session.commit()
@@ -110,6 +121,24 @@ def add_to_cart () :
 
     except Exception as error :
         current_app.logger.error(f'Error adding to cart: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+
+def auth_user (token) :
+    try :
+        # decode to retrieve uid
+        decoded_token = auth.verify_id_token(token)
+        uid = decoded_token['uid']
+
+        user = User.query.filter_by(firebase_uid = uid).first()
+        if not user :
+            return None
+        else :
+            return user
+    except Exception as error :
+        current_app.logger.error(f'Error authenticating user: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
