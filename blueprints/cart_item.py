@@ -9,7 +9,7 @@ cart_item_bp = Blueprint('cart_item', __name__)
 @cart_item_bp.route('/', methods = ['GET'])
 def view_cart() :
     try :
-        cart_items = Cart_Item.query.filter_by(user_id = 1).all() # needs user auth
+        cart_items = Cart_Item.query.filter_by(user_id = 1).all()
 
         if cart_items :
             shopping_cart = [
@@ -93,7 +93,6 @@ def add_to_cart () :
         token = request.headers['Authorization'].replace('Bearer ', '')
 
         product = Product.query.get(data.get('id'))
-
         if not product :
             return jsonify({
                 'error': 'Product not found'
@@ -109,8 +108,7 @@ def add_to_cart () :
                 'error': 'Internal server error'
             }), 500
         
-        
-        new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = 1, ordered = False)
+        new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
 
         db.session.add(new_item)
         db.session.commit()
