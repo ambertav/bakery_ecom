@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
+from flask_cors import cross_origin
 
 from ..app import db, auth
 from ..models import User, Product, Cart_Item
@@ -9,7 +10,11 @@ cart_item_bp = Blueprint('cart_item', __name__)
 @cart_item_bp.route('/', methods = ['GET'])
 def view_cart() :
     try :
-        cart_items = Cart_Item.query.filter_by(user_id = 1).all()
+        token = request.headers['Authorization'].replace('Bearer ', '')
+
+        user = auth_user(token)
+
+        cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
         if cart_items :
             shopping_cart = [
