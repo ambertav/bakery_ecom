@@ -21,9 +21,7 @@ def view_cart() :
                 item.as_dict() for item in cart_items
             ]
         else :
-            return jsonify({
-                'error': 'Shopping cart not found'
-            }), 404
+            shopping_cart = None
         
         return jsonify({
             'shopping_cart': shopping_cart
