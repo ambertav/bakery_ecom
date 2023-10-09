@@ -37,7 +37,10 @@ def view_cart() :
 @cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
 def delete_cart_item (id) :
     try :
-        cart_item = Cart_Item.query.get(id)
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+
+        cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
 
         if not cart_item :
             return jsonify({
