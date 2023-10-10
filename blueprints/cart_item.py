@@ -11,7 +11,6 @@ cart_item_bp = Blueprint('cart_item', __name__)
 def view_cart() :
     try :
         token = request.headers['Authorization'].replace('Bearer ', '')
-
         user = auth_user(token)
 
         cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
@@ -64,9 +63,12 @@ def delete_cart_item (id) :
 def update_quantity (id) :
     try :
         data = request.get_json()
-        new_quantity = data.get('quantity')
+        new_quantity = data['newQty']
 
-        cart_item = Cart_Item.query.get(id)
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+
+        cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
         
         if not cart_item :
             return jsonify({
