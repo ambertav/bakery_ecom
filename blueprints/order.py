@@ -1,8 +1,10 @@
 from flask import Blueprint, jsonify, request, current_app
+import stripe
 from datetime import datetime
 
 from ..app import db
 from ..models import User, Cart_Item, Order, Order_Status, Pay_Status
+
 
 order_bp = Blueprint('order', __name__)
 
@@ -31,6 +33,47 @@ def order_history_index () :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+@order_bp.route('/create-checkout-session', methods=['POST'])
+def create_checkout_session() :
+    cart = request.json.get('cart')
+
+    # dynamically create line_items for stripe checkout session from cart information
+    line_items = []
+    for item in cart :
+        line_item = {
+            'price_data': {
+                'currency': 'usd',
+                'product_data': {
+                    'name': item['name'],
+                },
+                'unit_amount': int(float(item['price']) * 100), # convert price to cents
+            },
+            'quantity': int(item['quantity']),
+        }
+        line_items.append(line_item)
+
+    try :
+        # create stripe checkout session
+        session = stripe.checkout.Session.create(
+            line_items = line_items,
+            mode = 'payment',
+            success_url='http://localhost:4242/success',
+            cancel_url='http://localhost:3000/cart',
+        )
+
+        return jsonify({
+            'checkout_url': session.url
+        })
+    
+    except Exception as error :
+        current_app.logger.error(f'Error: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
+
+
 
 @order_bp.route('/create', methods = ['POST'])
 def create_order () :
