@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app
 from flask_cors import cross_origin
 
-from ..app import db, auth
+from ..app import db
+from ..auth import auth_user
 from ..models import User, Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
@@ -12,6 +13,10 @@ def view_cart() :
     try :
         token = request.headers['Authorization'].replace('Bearer ', '')
         user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
 
         cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
@@ -38,6 +43,10 @@ def delete_cart_item (id) :
     try :
         token = request.headers['Authorization'].replace('Bearer ', '')
         user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
 
         cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
 
@@ -67,6 +76,10 @@ def update_quantity (id) :
 
         token = request.headers['Authorization'].replace('Bearer ', '')
         user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
 
         cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
         
@@ -108,13 +121,11 @@ def add_to_cart () :
         
 
         # retrieve and authenticate user
-        try :
-            user = auth_user(token)
-        except Exception as error :
-            current_app.logger.error(f'Error authenticating user: {str(error)}')
+        user = auth_user(token)
+        if user is None:
             return jsonify({
-                'error': 'Internal server error'
-            }), 500
+                'error': 'Authentication failed'
+            }), 401
         
         new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
 
@@ -127,24 +138,6 @@ def add_to_cart () :
 
     except Exception as error :
         current_app.logger.error(f'Error adding to cart: {str(error)}')
-        return jsonify({
-            'error': 'Internal server error'
-        }), 500
-    
-
-def auth_user (token) :
-    try :
-        # decode to retrieve uid
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
-
-        user = User.query.filter_by(firebase_uid = uid).first()
-        if not user :
-            return None
-        else :
-            return user
-    except Exception as error :
-        current_app.logger.error(f'Error authenticating user: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
