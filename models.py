@@ -44,14 +44,16 @@ class User (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
+    stripe_customer_id = db.Column(db.String(), nullable = True)
     billing_address = db.Column(db.Text(), nullable = True) # nullable on signup
     shipping_address = db.Column(db.Text(), nullable = True) # nullable for shipping same as billing option
     role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
-    def __init__ (self, name, firebase_uid, billing_address, shipping_address, role, created_at) :
+    def __init__ (self, name, firebase_uid, stripe_customer_id, billing_address, shipping_address, role, created_at) :
         self.name = name
         self.firebase_uid = firebase_uid
+        self.stripe_customer_id = stripe_customer_id
         self.billing_address = billing_address
         self.shipping_address = shipping_address
         self.role = role
@@ -127,18 +129,20 @@ class Order (db.Model) :
     total_price = db.Column(db.Numeric(precision = 10, scale = 2), nullable = False)
     date = db.Column(db.TIMESTAMP(), nullable = False)
     status = db.Column(db.Enum(Order_Status), nullable = False)
+    stripe_payment_id = db.Column(db.String, nullable = True)
     shipping_method = db.Column(db.Enum(Ship_Method), nullable = False)
-    payment_method = db.Column(db.Enum(Pay_Method), nullable = False)
+    payment_method = db.Column(db.Enum(Pay_Method), nullable = True)
     payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
     
     user = db.relationship('User', backref = 'orders')
     items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders')
 
-    def __init__ (self, user_id, date, total_price, status, shipping_method, payment_method, payment_status) :
+    def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_method, payment_status) :
         self.user_id = user_id
         self.date = date
         self.total_price = total_price
         self.status = status
+        self.stripe_payment_id = stripe_payment_id
         self.shipping_method = shipping_method
         self.payment_method = payment_method
         self.payment_status = payment_status
