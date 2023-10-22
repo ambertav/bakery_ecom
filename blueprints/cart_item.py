@@ -18,7 +18,7 @@ def view_cart() :
                 'error': 'Authentication failed'
             }), 401
 
-        cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
+        cart_items = Cart_Item.query.filter_by(user_id = user.id, ordered = False).all()
 
         if cart_items :
             shopping_cart = [
