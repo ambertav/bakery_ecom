@@ -74,19 +74,29 @@ class Address (db.Model) :
     street = db.Column(db.String(255), nullable = False)
     city = db.Column(db.String(100), nullable = False)
     state = db.Column(db.String(2), nullable = False)
-    zip_code = db.Column(db.String(10), nullable = False)
+    zip = db.Column(db.String(10), nullable = False)
     type = db.Column(db.Enum(AddressType), nullable = False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False)
 
-    def __init__ (self, first_name, last_name, street, city, state, zip_code, type, user_id) :
+    def __init__ (self, first_name, last_name, street, city, state, zip, type, user_id) :
         self.first_name = first_name
         self.last_name = last_name
         self.street = street
         self.city = city
         self.state = state
-        self.zip_code = zip_code
+        self.zip = zip
         self.type = type
         self.user_id = user_id
+
+    def as_dict (self) :
+        return {
+            'firstName': self.first_name,
+            'lastName': self.last_name,
+            'street': self.street,
+            'city': self.city,
+            'state': self.state,
+            'zip': self.zip,
+        }
 
 
 # Cart_item
