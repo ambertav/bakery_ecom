@@ -228,10 +228,10 @@ def handle_address (address, user, address_type) :
         existing_address = Address.query.filter_by(
             first_name = address['firstName'],
             last_name = address['lastName'],
-            street = address['address'],
+            street = address['street'],
             city = address['city'],
             state = address['state'],
-            zip_code = address['zip'],
+            zip = address['zip'],
             user_id = user.id,
             type = address_type,
         ).one_or_none()
@@ -241,10 +241,10 @@ def handle_address (address, user, address_type) :
             new_address =  Address(
                 first_name = address['firstName'],
                 last_name = address['lastName'],
-                street = address['address'],
+                street = address['street'],
                 city = address['city'],
                 state = address['state'],
-                zip_code = address['zip'],
+                zip = address['zip'],
                 user_id = user.id,
                 type = address_type,
             )
