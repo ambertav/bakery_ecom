@@ -45,10 +45,10 @@ class User (db.Model) :
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
     stripe_customer_id = db.Column(db.String(), nullable = True)
-    billing_address = db.Column(db.Text(), nullable = True) # nullable on signup
-    shipping_address = db.Column(db.Text(), nullable = True) # nullable for shipping same as billing option
     role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
+
+    addresses = db.relationship('Address', backref = 'user', lazy = 'dynamic')
 
     def __init__ (self, name, firebase_uid, stripe_customer_id, billing_address, shipping_address, role, created_at) :
         self.name = name
@@ -58,6 +58,35 @@ class User (db.Model) :
         self.shipping_address = shipping_address
         self.role = role
         self.created_at = created_at
+
+class AddressType (Enum) :
+    BILLING = 'BILLING'
+    SHIPPING = 'SHIPPING'
+    BOTH = 'BOTH'
+
+# Address
+class Address (db.Model) :
+    __tablename__ = 'addresses'
+
+    id = db.Column(db.Integer, primary_key = True)
+    first_name = db.Column(db.String(50), nullable = False)
+    last_name = db.Column(db.String(50), nullable = False)
+    street = db.Column(db.String(255), nullable = False)
+    city = db.Column(db.String(100), nullable = False)
+    state = db.Column(db.String(2), nullable = False)
+    zip_code = db.Column(db.String(10), nullable = False)
+    type = db.Column(db.Enum(AddressType), nullable = False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False)
+
+    def __init__ (self, first_name, last_name, street, city, state, zip_code, type, user_id) :
+        self.first_name = first_name
+        self.last_name = last_name
+        self.street = street
+        self.city = city
+        self.state = state
+        self.zip_code = zip_code
+        self.type = type
+        self.user_id = user_id
 
 
 # Cart_item
