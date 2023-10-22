@@ -4,7 +4,8 @@ import datetime
 
 
 from ..app import db, auth
-from ..models import User, Role
+from ..auth import auth_user
+from ..models import User, Role, AddressType
 
 from .cart_item import cart_item_bp
 from .order import order_bp
@@ -72,6 +73,35 @@ def login () :
         
     except Exception as error :
         current_app.logger.error(f'Error logging user in: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+
+@user_bp.route('/get-address', methods = ['GET'])
+def get_addresses () :
+    try :
+        # retrieve token and auth user
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+
+        addresses = user.addresses.all()
+
+        # if no addresses, set billing and shipping to None
+        if not addresses :
+            billing_list = None
+            shipping_list = None
+        else : 
+            billing_list = [address.as_dict() for address in addresses if address.type == AddressType.BILLING or address.type == AddressType.BOTH]
+            shipping_list = [address.as_dict() for address in addresses if address.type == AddressType.SHIPPING or address.type == AddressType.BOTH]
+
+        return jsonify({
+            'billAddress': billing_list,
+            'shipAddress': shipping_list
+        }), 200
+
+    except Exception as error :
+        current_app.logger.error(f'Error retrieving user addresses: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
