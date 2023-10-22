@@ -40,8 +40,8 @@ def create_checkout_session() :
     cart = request.json.get('cart')
     method = request.json.get('method')
 
-    billing = json.dumps(request.json.get('billing'))
-    shipping = json.dumps(request.json.get('shipping'))
+    billing = format_address(request.json.get('billing'))
+    shipping = format_address(request.json.get('shipping'))
 
     token = request.headers['Authorization'].replace('Bearer ', '')
     user = auth_user(token)
@@ -223,3 +223,9 @@ def show_order (id) :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+    
+
+def format_address (address) :
+    # formats address to string
+    formatted_address = f"{address['firstName']} {address['lastName']}\n{address['address']}\n{address['city']}, {address['state']} {address['zip']}"
+    return formatted_address
