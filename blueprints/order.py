@@ -233,9 +233,14 @@ def handle_address (address, user, address_type) :
             state = address['state'],
             zip = address['zip'],
             user_id = user.id,
-            type = address_type,
         ).one_or_none()
-    
+
+        # handles cases where existing address was previously either billing or shipping, but was then selected for both
+        if existing_address :
+            if existing_address != address_type and address_type == 'BOTH' :
+                existing_address.type = address_type
+                db.session.commit()
+
         # create address if necessary
         if existing_address is None :
             new_address =  Address(
