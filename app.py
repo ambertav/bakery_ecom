@@ -16,6 +16,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.getenv('DB_USER')}:{o
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+webhook_secret = os.getenv('WEBHOOK_SECRET')
 
 cred = credentials.Certificate('/Users/ambertaveras/projects-seirfx/bakery_ecom/backend/bakery-434c0-firebase-adminsdk-6ava5-1a23618776.json')
 firebase_admin.initialize_app(cred)

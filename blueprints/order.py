@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request, current_app
-import stripe
+import stripe, json
 from datetime import datetime
 
-from ..app import db
-from ..models import User, Cart_Item, Order, Order_Status, Pay_Status
+from ..app import db, webhook_secret
+from ..auth import auth_user
+from ..models import User, Cart_Item, Order, Order_Status, Pay_Status, Ship_Method
 
 
 order_bp = Blueprint('order', __name__)
@@ -37,9 +38,22 @@ def order_history_index () :
 @order_bp.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session() :
     cart = request.json.get('cart')
+    method = request.json.get('method')
+
+    billing = json.dumps(request.json.get('billing'))
+    shipping = json.dumps(request.json.get('shipping'))
+
+    token = request.headers['Authorization'].replace('Bearer ', '')
+    user = auth_user(token)
+    if user is None :
+        return jsonify({
+            'error': 'Authentication failed'
+        }), 401
+            
 
     # dynamically create line_items for stripe checkout session from cart information
     line_items = []
+    cart_ids = []
     for item in cart :
         line_item = {
             'price_data': {
@@ -52,14 +66,22 @@ def create_checkout_session() :
             'quantity': int(item['quantity']),
         }
         line_items.append(line_item)
+        cart_ids.append(item['id'])
 
     try :
         # create stripe checkout session
         session = stripe.checkout.Session.create(
             line_items = line_items,
             mode = 'payment',
-            success_url='http://localhost:4242/success',
-            cancel_url='http://localhost:3000/cart',
+            success_url = 'http://localhost:3000/cart/success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url = 'http://localhost:3000/cart',
+            metadata = {
+                'cart': str(cart_ids),
+                'method': method,
+                'billing': billing,
+                'shipping': shipping,
+                'user': user.id
+            }
         )
 
         return jsonify({
@@ -71,45 +93,105 @@ def create_checkout_session() :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+    
+@order_bp.route('/stripe-webhook', methods = ['POST'])    
+def handle_stripe_webhook () :
+    event = None
+    payload = request.data
 
-
-
-
-@order_bp.route('/create', methods = ['POST'])
-def create_order () :
     try :
-        data = request.get_json()
-
-        user_id = 1
-        cart_items = Cart_Item.query.filter_by(user_id = 1).all()
-
-        if not cart_items :
-            return jsonify({
-                'message': 'No items in the cart. Cannot create order.'
-            }), 400
+        event = json.loads(payload)
+    except json.decoder.JSONDecodeError as error :
+        current_app.logger.error(f'Webhook error while parsing basic request: {str(error)}')
+        return jsonify(
+            success = False
+        )
+    
+    if webhook_secret :
+        sig_header = request.headers.get('Stripe-Signature')
+        try :
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, webhook_secret
+            )
+        except stripe.error.SignatureVerificationError as error:
+            current_app.logger.error(f'Webhook signature verification failed: {str(error)}')
+            return jsonify(
+                success = False
+            )
         
-        total = sum(item.product.price * item.quantity for item in cart_items)
 
+        if event and event['type'] == 'checkout.session.completed' :
+            session = event['data']['object']
+            cart = session.metadata.get('cart')
+            method = session.metadata.get('method')
+            billing = session.metadata.get('billing')
+            shipping = session.metadata.get('shipping')
+            user_id = session.metadata.get('user')
+
+            # create instance of order
+            new_order = create_order(cart, user_id, method)
+
+            try :
+                user = User.query.filter_by(id = user_id).first()
+                # associate stripe's customer id with user in database
+                if user and not user.stripe_customer_id :
+                    user.stripe_customer_id = session.customer
+                
+                # add new addresses to user
+                user.billing_address = billing
+                user.shipping_address = shipping
+
+                # finalize order with payment info from stripe
+                new_order.stripe_payment_id = session.payment_intent
+                new_order.status =  Order_Status.PROCESSING
+                new_order.payment_status =  Pay_Status.COMPLETED
+
+                db.session.commit()
+
+            except Exception as error :
+                current_app.logger.error(f'Error saving order: {str(error)}')
+                return jsonify({
+                    'error': 'Internal server error'
+                }), 500
+
+        else :
+            print('Unhandled event type {}'.format(event['type']))
+    
+    return jsonify(
+        success = True
+    )
+
+def create_order (cart, user, method) :
+    try :
+        # find the cart items and calculate total
+        items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
+        total = sum(item.product.price * item.quantity for item in items_to_associate)
+
+        print(total)
+
+        # create instance of order and associate with user
         new_order = Order(
-            user_id = user_id,
+            user_id = user,
             date = datetime.now(),
             total_price = total,
-            status = Order_Status.PENDING,
-            shipping_method = data.get('shipping_method'),
-            payment_method = data.get('payment_method'),
+            status = 'PENDING',
+            stripe_payment_id = None,
+            shipping_method = Ship_Method.STANDARD,
+            payment_method = None,
             payment_status = Pay_Status.PENDING
         )
 
-        for cart_item in cart_items :
-            new_order.items.append(cart_item)
-            cart_item.ordered = True
-
         db.session.add(new_order)
-        db.session.commit()
 
-        return jsonify({
-            'message': 'Order created successfully.'
-        }), 200
+        # associate cart items with order, and update cart_items to ordered
+        new_order.items.extend(items_to_associate)
+        for item in items_to_associate :
+            item.ordered = True
+
+        db.session.commit()
+        
+        return new_order
+        
     except Exception as error :
         current_app.logger.error(f'Error creating order: {str(error)}')
         return jsonify({
