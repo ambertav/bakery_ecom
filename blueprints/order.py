@@ -4,7 +4,7 @@ from datetime import datetime
 
 from ..app import db, webhook_secret
 from ..auth import auth_user
-from ..models import User, Cart_Item, Order, Order_Status, Pay_Status, Ship_Method
+from ..models import User, Address, Cart_Item, Order, Order_Status, Pay_Status, Ship_Method
 
 
 order_bp = Blueprint('order', __name__)
@@ -40,9 +40,10 @@ def create_checkout_session() :
     cart = request.json.get('cart')
     method = request.json.get('method')
 
-    billing = format_address(request.json.get('billing'))
-    shipping = format_address(request.json.get('shipping'))
+    billing = request.json.get('billing')
+    shipping = request.json.get('shipping')
 
+    # retrieve token and auth user
     token = request.headers['Authorization'].replace('Bearer ', '')
     user = auth_user(token)
     if user is None :
@@ -50,6 +51,12 @@ def create_checkout_session() :
             'error': 'Authentication failed'
         }), 401
             
+    # create necessary user addresses from delivery form input
+    if billing == shipping:
+        handle_address(billing, user, address_type = 'BOTH')
+    else:
+        handle_address(billing, user, address_type = 'BILLING')
+        handle_address(shipping, user, address_type = 'SHIPPING')
 
     # dynamically create line_items for stripe checkout session from cart information
     line_items = []
@@ -76,11 +83,9 @@ def create_checkout_session() :
             success_url = 'http://localhost:3000/cart/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url = 'http://localhost:3000/cart',
             metadata = {
-                'cart': str(cart_ids),
-                'method': method,
-                'billing': billing,
-                'shipping': shipping,
-                'user': user.id
+                'cart': str(cart_ids), # pass in string of cart ids for order creation
+                'method': method, # pass in delivery method from delivery form input
+                'user': user.id # pass in user id for order creation
             }
         )
 
@@ -124,23 +129,18 @@ def handle_stripe_webhook () :
             session = event['data']['object']
             cart = session.metadata.get('cart')
             method = session.metadata.get('method')
-            billing = session.metadata.get('billing')
-            shipping = session.metadata.get('shipping')
             user_id = session.metadata.get('user')
 
             # create instance of order
             new_order = create_order(cart, user_id, method)
 
-            try :
-                user = User.query.filter_by(id = user_id).first()
-                # associate stripe's customer id with user in database
-                if user and not user.stripe_customer_id :
-                    user.stripe_customer_id = session.customer
-                
-                # add new addresses to user
-                user.billing_address = billing
-                user.shipping_address = shipping
+            user = User.query.filter_by(id = user_id).first()
 
+            # associate stripe's customer id with user in database
+            if user and not user.stripe_customer_id :
+                user.stripe_customer_id = session.customer
+
+            try :
                 # finalize order with payment info from stripe
                 new_order.stripe_payment_id = session.payment_intent
                 new_order.status =  Order_Status.PROCESSING
@@ -149,7 +149,7 @@ def handle_stripe_webhook () :
                 db.session.commit()
 
             except Exception as error :
-                current_app.logger.error(f'Error saving order: {str(error)}')
+                current_app.logger.error(f'Error finalizing order: {str(error)}')
                 return jsonify({
                     'error': 'Internal server error'
                 }), 500
@@ -166,8 +166,6 @@ def create_order (cart, user, method) :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
         total = sum(item.product.price * item.quantity for item in items_to_associate)
-
-        print(total)
 
         # create instance of order and associate with user
         new_order = Order(
@@ -224,8 +222,46 @@ def show_order (id) :
             'error': 'Internal server error'
         }), 500
     
+def handle_address (address, user, address_type) :
+    try :
+        # search for address
+        existing_address = Address.query.filter_by(
+            first_name = address['firstName'],
+            last_name = address['lastName'],
+            street = address['address'],
+            city = address['city'],
+            state = address['state'],
+            zip_code = address['zip'],
+            user_id = user.id,
+            type = address_type,
+        ).one_or_none()
+    
+        # create address if necessary
+        if existing_address is None :
+            new_address =  Address(
+                first_name = address['firstName'],
+                last_name = address['lastName'],
+                street = address['address'],
+                city = address['city'],
+                state = address['state'],
+                zip_code = address['zip'],
+                user_id = user.id,
+                type = address_type,
+            )
 
-def format_address (address) :
-    # formats address to string
-    formatted_address = f"{address['firstName']} {address['lastName']}\n{address['address']}\n{address['city']}, {address['state']} {address['zip']}"
-    return formatted_address
+            db.session.add(new_address)
+            db.session.commit()
+
+    except Exception as error :
+        current_app.logger.error(f'Error handling address: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
+
+
+
+
+
+
+
