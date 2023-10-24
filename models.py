@@ -171,8 +171,8 @@ class Order (db.Model) :
 
     
     user = db.relationship('User', backref = 'orders')
-    items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders', cascade = "all, delete-orphan")
-    shipping_address = db.relationship('Address', foreign_keys = [shipping_address_id], uselist = False)
+    items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders')
+    address = db.relationship('Address', backref = 'orders')
 
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_status, shipping_address_id) :
         self.user_id = user_id
@@ -192,6 +192,6 @@ class Order (db.Model) :
             'date': self.date,
             'status': self.status.value,
             'shipping_method': self.shipping_method.value, 
-            'payment_method': self.payment_method.value, 
-            'payment_status': self.payment_status.value  
+            'payment_status': self.payment_status.value,
+            'address': self.shipping_address_id,
         }
