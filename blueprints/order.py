@@ -53,10 +53,10 @@ def create_checkout_session() :
             
     # create necessary user addresses from delivery form input
     if billing == shipping:
-        handle_address(billing, user, address_type = 'BOTH')
+        address_id = handle_address(billing, user, address_type = 'BOTH')
     else:
         handle_address(billing, user, address_type = 'BILLING')
-        handle_address(shipping, user, address_type = 'SHIPPING')
+        address_id = handle_address(shipping, user, address_type = 'SHIPPING')
 
     # dynamically create line_items for stripe checkout session from cart information
     line_items = []
@@ -85,7 +85,8 @@ def create_checkout_session() :
             metadata = {
                 'cart': str(cart_ids), # pass in string of cart ids for order creation
                 'method': method, # pass in delivery method from delivery form input
-                'user': user.id # pass in user id for order creation
+                'user': user.id, # pass in user id for order creation
+                'address_id': address_id
             }
         )
 
@@ -127,12 +128,12 @@ def handle_stripe_webhook () :
 
         if event and event['type'] == 'checkout.session.completed' :
             session = event['data']['object']
-            cart = session.metadata.get('cart')
             method = session.metadata.get('method')
             user_id = session.metadata.get('user')
+            address_id = session.metadata.get('address_id')
 
             # create instance of order
-            new_order = create_order(cart, user_id, method)
+            new_order = create_order(address_id, user_id, method)
 
             user = User.query.filter_by(id = user_id).first()
 
@@ -161,7 +162,7 @@ def handle_stripe_webhook () :
         success = True
     )
 
-def create_order (cart, user, method) :
+def create_order (address, user, method) :
     try :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
@@ -175,8 +176,8 @@ def create_order (cart, user, method) :
             status = 'PENDING',
             stripe_payment_id = None,
             shipping_method = Ship_Method.STANDARD,
-            payment_method = None,
-            payment_status = Pay_Status.PENDING
+            payment_status = Pay_Status.PENDING,
+            shipping_address_id = address,
         )
 
         db.session.add(new_order)
@@ -240,6 +241,7 @@ def handle_address (address, user, address_type) :
             if existing_address != address_type and address_type == 'BOTH' :
                 existing_address.type = address_type
                 db.session.commit()
+                return existing_address.id # returns id only to pass into order creation
 
         # create address if necessary
         if existing_address is None :
@@ -256,6 +258,8 @@ def handle_address (address, user, address_type) :
 
             db.session.add(new_address)
             db.session.commit()
+
+            return new_address.id # returns id only to pass into order creation
 
     except Exception as error :
         current_app.logger.error(f'Error handling address: {str(error)}')
