@@ -142,10 +142,6 @@ class Ship_Method (Enum) :
     EXPRESS = 'EXPRESS'
     NEXT_DAY = 'NEXT_DAY'
 
-class Pay_Method (Enum) :
-    CREDIT_CARD = 'CREDIT_CARD'
-    PAYPAL = 'PAYPAL'
-    CASH = 'CASH'
 
 class Pay_Status (Enum) :
     PENDING = 'PENDING'
@@ -170,11 +166,13 @@ class Order (db.Model) :
     status = db.Column(db.Enum(Order_Status), nullable = False)
     stripe_payment_id = db.Column(db.String, nullable = True)
     shipping_method = db.Column(db.Enum(Ship_Method), nullable = False)
-    payment_method = db.Column(db.Enum(Pay_Method), nullable = True)
     payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
+    shipping_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), unique = True)
+
     
     user = db.relationship('User', backref = 'orders')
-    items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders')
+    items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders', cascade = "all, delete-orphan")
+    shipping_address = db.relationship('Address', foreign_keys = [shipping_address_id], uselist = False)
 
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_method, payment_status) :
         self.user_id = user_id
