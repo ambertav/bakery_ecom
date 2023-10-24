@@ -174,15 +174,15 @@ class Order (db.Model) :
     items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders', cascade = "all, delete-orphan")
     shipping_address = db.relationship('Address', foreign_keys = [shipping_address_id], uselist = False)
 
-    def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_method, payment_status) :
+    def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_status, shipping_address_id) :
         self.user_id = user_id
         self.date = date
         self.total_price = total_price
         self.status = status
         self.stripe_payment_id = stripe_payment_id
         self.shipping_method = shipping_method
-        self.payment_method = payment_method
         self.payment_status = payment_status
+        self.shipping_address_id = shipping_address_id
 
     def as_dict (self) :
         return {
