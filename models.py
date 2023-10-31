@@ -93,6 +93,7 @@ class Address (db.Model) :
 
     def as_dict (self) :
         return {
+            'id': self.id,
             'firstName': self.first_name,
             'lastName': self.last_name,
             'street': self.street,
@@ -189,13 +190,18 @@ class Order (db.Model) :
         self.shipping_address_id = shipping_address_id
 
     def as_dict (self) :
+        if self.address :
+            address_data = self.address.as_dict()
+        else :
+            address_data = {}
+
         return {
             'id': self.id,
             'user_id': self.user.id,
             'total_price': self.total_price,
             'date': self.date,
-            'status': self.status.value,
-            'shipping_method': self.shipping_method.value, 
-            'payment_status': self.payment_status.value,
-            'address': self.shipping_address_id,
+            'status': serialize_enum(self.status),
+            'shipping_method': serialize_enum(self.shipping_method), 
+            'payment_status': serialize_enum(self.payment_status),
+            'address': address_data,
         }
