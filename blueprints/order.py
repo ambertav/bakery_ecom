@@ -104,10 +104,10 @@ def create_checkout_session() :
             
     # create necessary user addresses from delivery form input
     if billing == shipping:
-        address_id = handle_address(billing, user, address_type = 'BOTH')
+        address_id = handle_address(billing, user)
     else:
-        handle_address(billing, user, address_type = 'BILLING')
-        address_id = handle_address(shipping, user, address_type = 'SHIPPING')
+        handle_address(billing, user)
+        address_id = handle_address(shipping, user)
 
     # dynamically create line_items for stripe checkout session from cart information
     line_items = []
@@ -137,7 +137,7 @@ def create_checkout_session() :
                 'cart': str(cart_ids), # pass in string of cart ids for order creation
                 'method': method, # pass in delivery method from delivery form input
                 'user': user.id, # pass in user id for order creation
-                'address_id': address_id
+                'address_id': address_id # only passing in shipping address to associate with order
             }
         )
 
@@ -248,7 +248,7 @@ def create_order (address, user, method) :
             'error': 'Internal server error'
         }), 500
     
-def handle_address (address, user, address_type) :
+def handle_address (address, user) :
     try :
         # search for address
         existing_address = Address.query.filter_by(
@@ -263,10 +263,7 @@ def handle_address (address, user, address_type) :
 
         # handles cases where existing address was previously either billing or shipping, but was then selected for both
         if existing_address :
-            if existing_address != address_type and address_type == 'BOTH' :
-                existing_address.type = address_type
-                db.session.commit()
-                return existing_address.id # returns id only to pass into order creation
+            return existing_address.id # returns id only to pass into order creation
 
         # create address if necessary
         if existing_address is None :
@@ -278,7 +275,7 @@ def handle_address (address, user, address_type) :
                 state = address['state'],
                 zip = address['zip'],
                 user_id = user.id,
-                type = address_type,
+                default = False,
             )
 
             db.session.add(new_address)
