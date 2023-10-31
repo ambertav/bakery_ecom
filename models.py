@@ -3,6 +3,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey
 from enum import Enum
 
+def serialize_enum (enum_value) :
+    return enum_value.value.lower()
+
 # Product
 class Product (db.Model) :
     __tablename__ = 'products'
@@ -96,6 +99,7 @@ class Address (db.Model) :
             'city': self.city,
             'state': self.state,
             'zip': self.zip,
+            'type': serialize_enum(self.type)
         }
 
 
