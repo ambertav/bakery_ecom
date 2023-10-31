@@ -25,7 +25,7 @@ def get_addresses () :
             default_address = user.addresses.filter_by(default = True).first()
         else:
             # Retrieve all addresses for the user
-            addresses = user.addresses.all()
+            addresses = user.addresses.order_by(Address.default.desc()).all()
 
         if is_default and default_address :
             address_history = default_address.as_dict()
@@ -40,6 +40,39 @@ def get_addresses () :
 
     except Exception as error :
         current_app.logger.error(f'Error retrieving user addresses: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+@address_bp.route('/default/<int:id>', methods = ['PUT'])
+def update_default (id) :
+    try :
+        # retrieve token and auth user
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        print(token)
+        user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        current_default =  user.addresses.filter_by(default = True).first()
+
+        if current_default :
+            current_default.default = False
+        
+        set_default = user.addresses.filter_by(id = id).first()
+
+        if set_default :
+            set_default.default = True
+            db.session.commit()
+
+        return jsonify({
+            'message': 'Default address updated successfully'
+        }), 200
+
+    except Exception as error :
+        current_app.logger.error(f'Error updating default address: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
