@@ -127,7 +127,7 @@ class Cart_Item (db.Model) :
     def as_dict (self) :
         return {
             'id': self.id,
-            'product_id': self.product.id,
+            'productId': self.product.id,
             'name': self.product.name,
             'image': self.product.image,
             'price': self.product.price,

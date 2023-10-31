@@ -51,6 +51,40 @@ def order_history_index () :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+    
+
+@order_bp.route('/<int:id>', methods = ['GET'])
+def show_order (id) :
+    try :
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        
+        order = Order.query.filter_by(id = id, user_id = user.id).first()
+
+        if order :
+            order_detail = order.as_dict()
+            cart_items = order.items
+            cart_item_details = [item.as_dict() for item in cart_items]
+            order_detail['items'] = cart_item_details
+
+            return jsonify({
+                'order': order_detail
+            }), 200
+        else :
+            return jsonify({
+                'error': 'Order not found'
+            }), 404
+
+    except Exception as error :
+        current_app.logger.error(f'Error fetching order details: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 @order_bp.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session() :
@@ -210,32 +244,6 @@ def create_order (address, user, method) :
         
     except Exception as error :
         current_app.logger.error(f'Error creating order: {str(error)}')
-        return jsonify({
-            'error': 'Internal server error'
-        }), 500
-
-
-@order_bp.route('/<int:id>', methods = ['GET'])
-def show_order (id) :
-    try :
-        order = Order.query.get(id)
-
-        if order :
-            order_detail = order.as_dict()
-            cart_items = order.items
-            cart_item_details = [item.as_dict() for item in cart_items]
-            order_detail['items'] = cart_item_details
-
-            return jsonify({
-                'order': order_detail
-            }), 200
-        else :
-            return jsonify({
-                'error': 'Order not found'
-            }), 404
-
-    except Exception as error :
-        current_app.logger.error(f'Error fetching order details: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
