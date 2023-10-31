@@ -15,14 +15,22 @@ def order_history_index () :
     try :
         # retrieve token and auth user
         token = request.headers['Authorization'].replace('Bearer ', '')
-        print(token)
         user = auth_user(token)
         if user is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
         
-        orders = Order.query.filter_by(user_id = user.id).all()
+        # check if recent query parameter is included and set to true
+        is_recent = request.args.get('recent', '').lower() == 'true'
+
+        if is_recent :
+            # filter by user, sort by date, only take most recent 3
+            orders = Order.query.filter_by(user_id = user.id).order_by(Order.date.desc()).limit(3).all() 
+        else :
+            # filter by user, sort by date, take all
+            orders = Order.query.filter_by(user_id = user.id).order_by(Order.date.desc()).all() 
+
 
         if orders :
             order_history = [
