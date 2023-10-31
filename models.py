@@ -197,11 +197,10 @@ class Order (db.Model) :
 
         return {
             'id': self.id,
-            'user_id': self.user.id,
-            'total_price': self.total_price,
-            'date': self.date,
+            'totalPrice': self.total_price,
+            'date': self.date.strftime('%m/%d/%Y %I:%M %p'),
             'status': serialize_enum(self.status),
-            'shipping_method': serialize_enum(self.shipping_method), 
-            'payment_status': serialize_enum(self.payment_status),
+            'shippingMethod': serialize_enum(self.shipping_method), 
+            'paymentStatus': serialize_enum(self.payment_status),
             'address': address_data,
         }
