@@ -49,7 +49,6 @@ def update_default (id) :
     try :
         # retrieve token and auth user
         token = request.headers['Authorization'].replace('Bearer ', '')
-        print(token)
         user = auth_user(token)
         if user is None:
             return jsonify({
@@ -71,6 +70,42 @@ def update_default (id) :
             'message': 'Default address updated successfully'
         }), 200
 
+    except Exception as error :
+        current_app.logger.error(f'Error updating default address: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+@address_bp.route('/<int:id>/delete', methods = ['DELETE'])
+def delete (id) :
+    try : 
+        # retrieve token and auth user
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        deleted_address = user.addresses.filter_by(id = id).first()
+
+        if deleted_address :
+            if deleted_address.default : # if the address to delete is designated as default...
+                next_address = user.addresses.filter(Address.id != id).first() # finds next available address to set as default
+                if next_address:
+                    next_address.default = True
+                    
+            db.session.delete(deleted_address)
+            db.session.commit()
+        else :
+            return jsonify({
+                'error': 'Address not found'
+            }), 404  
+    
+        return jsonify({
+            'message': 'Address deleted successfully'
+        }), 200
+            
     except Exception as error :
         current_app.logger.error(f'Error updating default address: {str(error)}')
         return jsonify({
