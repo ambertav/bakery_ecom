@@ -13,7 +13,16 @@ order_bp = Blueprint('order', __name__)
 @order_bp.route('/', methods = ['GET'])
 def order_history_index () :
     try :
-        orders = Order.query.filter_by(user_id = 1).all()
+        # retrieve token and auth user
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        print(token)
+        user = auth_user(token)
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        orders = Order.query.filter_by(user_id = user.id).all()
 
         if orders :
             order_history = [
@@ -25,7 +34,7 @@ def order_history_index () :
             }), 404
         
         return jsonify({
-            'order_history': order_history
+            'orders': order_history
         }), 200
 
 
