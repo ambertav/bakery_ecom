@@ -219,6 +219,15 @@ def create_order (address, user, method) :
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
         total = sum(item.product.price * item.quantity for item in items_to_associate)
 
+        # map out method string value to ship method enum value
+        method_mapping = {
+            'STANDARD': Ship_Method.STANDARD,
+            'EXPRESS': Ship_Method.EXPRESS,
+            'NEXT_DAY': Ship_Method.NEXT_DAY,
+        }
+
+        order_ship_method = method_mapping.get(method)
+
         # create instance of order and associate with user
         new_order = Order(
             user_id = user,
@@ -226,7 +235,7 @@ def create_order (address, user, method) :
             total_price = total,
             status = 'PENDING',
             stripe_payment_id = None,
-            shipping_method = Ship_Method.STANDARD,
+            shipping_method = order_ship_method,
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address,
         )

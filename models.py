@@ -167,7 +167,7 @@ class Order (db.Model) :
     stripe_payment_id = db.Column(db.String, nullable = True)
     shipping_method = db.Column(db.Enum(Ship_Method), nullable = False)
     payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
-    shipping_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), unique = True)
+    shipping_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), unique = False)
 
     
     user = db.relationship('User', backref = 'orders')
