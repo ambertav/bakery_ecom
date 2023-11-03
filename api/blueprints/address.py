@@ -10,9 +10,8 @@ address_bp = Blueprint('address', __name__)
 @address_bp.route('/', methods = ['GET'])
 def get_addresses () :
     try :
-        # retrieve token and auth user
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
@@ -48,8 +47,8 @@ def get_addresses () :
 def update_default (id) :
     try :
         # retrieve token and auth user
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
@@ -80,8 +79,8 @@ def update_default (id) :
 def delete (id) :
     try : 
         # retrieve token and auth user
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'

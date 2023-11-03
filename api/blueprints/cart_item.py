@@ -11,8 +11,8 @@ cart_item_bp = Blueprint('cart_item', __name__)
 @cart_item_bp.route('/', methods = ['GET'])
 def view_cart() :
     try :
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
@@ -41,8 +41,8 @@ def view_cart() :
 @cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
 def delete_cart_item (id) :
     try :
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
@@ -71,15 +71,15 @@ def delete_cart_item (id) :
 @cart_item_bp.route('/<int:id>/update', methods = ['PUT'])
 def update_quantity (id) :
     try :
-        data = request.get_json()
-        new_quantity = data['newQty']
+        user = auth_user(request)
 
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
+        
+        data = request.get_json()
+        new_quantity = data['newQty']
 
         cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
         
@@ -108,17 +108,16 @@ def update_quantity (id) :
 @cart_item_bp.route('/add', methods = ['POST'])
 def add_to_cart () :
     try :
-        data = request.get_json()
-
         # retrieve token
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        # retrieve and authenticate user
-        user = auth_user(token)
+        user = auth_user(request)
+
         if user is None:
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
         
+        data = request.get_json()
+
         response = create_item(data, user) # adds to database, returns with boolean and message
 
         if response['success'] == True:

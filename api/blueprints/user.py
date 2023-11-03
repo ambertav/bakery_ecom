@@ -3,6 +3,7 @@ import datetime
 
 
 from ...app import db, auth
+from ..utils.auth import auth_user
 from ..models.models import User, Role
 
 from .cart_item import create_item
@@ -51,13 +52,7 @@ def signup () :
 @user_bp.route('/login', methods = ['POST'])
 def login () :
     try :
-        # retrieve token
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        # decode to retrieve uid
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
-
-        user = User.query.filter_by(firebase_uid = uid).first()
+        user = auth_user(request)
 
         if not user :
             return jsonify({

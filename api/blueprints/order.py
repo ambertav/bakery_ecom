@@ -13,9 +13,9 @@ order_bp = Blueprint('order', __name__)
 def order_history_index () :
     try :
         # retrieve token and auth user
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
-        if user is None :
+        user = auth_user(request)
+
+        if user is None:
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
@@ -48,9 +48,9 @@ def order_history_index () :
 @order_bp.route('/<int:id>', methods = ['GET'])
 def show_order (id) :
     try :
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
-        if user is None :
+        user = auth_user(request)
+
+        if user is None:
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
@@ -80,19 +80,18 @@ def show_order (id) :
 
 @order_bp.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session() :
-    cart = request.json.get('cart')
-    method = request.json.get('method')
-
-    billing = request.json.get('billing')
-    shipping = request.json.get('shipping')
-
     # retrieve token and auth user
-    token = request.headers['Authorization'].replace('Bearer ', '')
-    user = auth_user(token)
-    if user is None :
+    user = auth_user(request)
+
+    if user is None:
         return jsonify({
             'error': 'Authentication failed'
         }), 401
+    
+    cart = request.json.get('cart')
+    method = request.json.get('method')
+    billing = request.json.get('billing')
+    shipping = request.json.get('shipping')
             
     # create necessary user addresses from delivery form input
     if billing == shipping:

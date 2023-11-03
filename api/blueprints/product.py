@@ -34,8 +34,7 @@ def product_index () :
 def create_product () :
     try :
         # retrieve token and auth user
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        user = auth_user(token)
+        user = auth_user(request)
 
         if user is None :
             return jsonify({
