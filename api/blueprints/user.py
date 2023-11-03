@@ -18,15 +18,15 @@ def signup () :
         decoded_token = auth.verify_id_token(token)
         uid = decoded_token['uid']
 
-        user_data = {}
-        # assign all fields for user creation
-        user_data['name'] = request.json.get('name')
-        user_data['firebase_uid'] = uid
-        user_data['stripe_customer_id'] = None
-        user_data['billing_address'] = None
-        user_data['shipping_address'] = None
-        user_data['role'] = Role.CLIENT
-        user_data['created_at'] = datetime.datetime.utcnow()
+        user_data = {
+            'name': request.json.get('name'),
+            'firebase_uid': uid,
+            'stripe_customer_id': None,
+            'billing_address': None,
+            'shipping_address': None,
+            'role': Role.CLIENT,
+            'created_at': datetime.datetime.utcnow()
+        }
 
         new_user = User(**user_data)
 
@@ -34,20 +34,7 @@ def signup () :
         db.session.commit()
 
         shopping_cart = request.json.get('localStorageCart')
-        errors = []
-        if shopping_cart :
-            for item in shopping_cart :
-                data = {
-                    'id': item.get('productId'),
-                    'qty': item.get('quantity')
-                }
-                response = create_item(data = data, user = new_user)
-                if not response['success'] :
-                    errors.append(f"Error adding item with ID {data['id']} to the cart")
-
-        cartError = ''
-        if errors :
-            cartError = ', '.join(errors)
+        cartError = process_shopping_cart(shopping_cart, new_user) # formats local storage cart to create cart item, returns errors if any
 
         return jsonify({
             'message': 'User registered successfully',
@@ -79,20 +66,7 @@ def login () :
         
         else :
             shopping_cart = request.json.get('localStorageCart')
-            errors = []
-            if shopping_cart :
-                for item in shopping_cart :
-                    data = {
-                        'id': item.get('productId'),
-                        'qty': item.get('quantity')
-                    }
-                    response = create_item(data = data, user = user)
-                    if not response['success'] :
-                        errors.append(f"Error adding item with ID {data['id']} to the cart")
-
-            cartError = ''
-            if errors :
-                cartError = ', '.join(errors)
+            cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
                 
             return jsonify({
                 'message': 'User logged in successfully',
@@ -104,3 +78,19 @@ def login () :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+    
+
+def process_shopping_cart(shopping_cart, user) :
+    errors = []
+    if shopping_cart :
+        for item in shopping_cart :
+            data = {
+                'id': item.get('productId'),
+                'qty': item.get('quantity')
+            }
+            response = create_item(data, user) # creates cart item for each item in shopping cart
+            if not response['success'] :
+                errors.append(f"Error adding item with ID {data['id']} to the cart") # catches errors per item
+
+    cartError = ', '.join(errors) if errors else ''
+    return cartError # returns errors, if any
