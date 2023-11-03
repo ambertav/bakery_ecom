@@ -26,11 +26,11 @@ CORS(app, supports_credentials=True, origins='http://localhost:3000')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-from .blueprints.product import product_bp
-from .blueprints.user import user_bp
-from .blueprints.cart_item import cart_item_bp
-from .blueprints.order import order_bp
-from .blueprints.address import address_bp
+from .api.blueprints.product import product_bp
+from .api.blueprints.user import user_bp
+from .api.blueprints.cart_item import cart_item_bp
+from .api.blueprints.order import order_bp
+from .api.blueprints.address import address_bp
 
 app.register_blueprint(product_bp, url_prefix='/api/product')
 app.register_blueprint(user_bp, url_prefix='/api/user')
