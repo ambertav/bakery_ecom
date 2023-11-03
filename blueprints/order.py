@@ -32,14 +32,7 @@ def order_history_index () :
             orders = Order.query.filter_by(user_id = user.id).order_by(Order.date.desc()).all() 
 
 
-        if orders :
-            order_history = [
-                order.as_dict() for order in orders
-            ]
-        else :
-            return jsonify({
-                'error': 'Orders not found'
-            }), 404
+        order_history = [ order.as_dict() for order in orders ]
         
         return jsonify({
             'orders': order_history
