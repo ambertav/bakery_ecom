@@ -112,14 +112,6 @@ def add_to_cart () :
 
         # retrieve token
         token = request.headers['Authorization'].replace('Bearer ', '')
-
-        product = Product.query.get(data.get('id'))
-        if not product :
-            return jsonify({
-                'error': 'Product not found'
-            }), 404
-        
-
         # retrieve and authenticate user
         user = auth_user(token)
         if user is None:
@@ -127,9 +119,22 @@ def add_to_cart () :
                 'error': 'Authentication failed'
             }), 401
         
-        new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
+        # ensure valid product
+        product = Product.query.get(data.get('id'))
+        if not product :
+            return jsonify({
+                'error': 'Product not found'
+            }), 404
+        
+        # search users existing cart for an item with matching product id
+        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, ordered = False).first()
 
-        db.session.add(new_item)
+        if existing_item :
+            existing_item.quantity += data.get('qty') # update quantity instead of creating new cart item
+        else :
+            new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
+            db.session.add(new_item)
+
         db.session.commit()
         
         return jsonify({
