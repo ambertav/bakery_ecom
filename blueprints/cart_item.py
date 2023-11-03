@@ -106,19 +106,24 @@ def update_quantity (id) :
 
 # create
 @cart_item_bp.route('/add', methods = ['POST'])
-def add_to_cart () :
+def add_to_cart (data, user) :
     try :
-        data = request.get_json()
+        print(user)
 
-        # retrieve token
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        # retrieve and authenticate user
-        user = auth_user(token)
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
-        
+        if user is None :
+            # retrieve token
+            token = request.headers['Authorization'].replace('Bearer ', '')
+            # retrieve and authenticate user
+            user = auth_user(token)
+            if user is None:
+                return jsonify({
+                    'error': 'Authentication failed'
+                }), 401
+            
+        if data is None :
+            data = request.get_json()
+            
+        print('running')
         # ensure valid product
         product = Product.query.get(data.get('id'))
         if not product :
