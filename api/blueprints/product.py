@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app
 
 from ...app import db
-from ..models.models import Product
+from ..utils.auth import auth_user
+from ..models.models import Product, Role
 
 product_bp = Blueprint('product', __name__)
 
@@ -13,9 +14,7 @@ def product_index () :
 
         if products :
             # list of products in stock
-            products_list = [
-                product.as_dict() for product in products if product.stock > 0 # .as_dict() formats product
-            ]
+            products_list = [ product.as_dict() for product in products if product.stock > 0 ]
         
             return jsonify({
                 'products': products_list
@@ -34,6 +33,19 @@ def product_index () :
 @product_bp.route('/create', methods = ['POST'])
 def create_product () :
     try :
+        # retrieve token and auth user
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        user = auth_user(token)
+
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        elif user.role != Role.ADMIN :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
         data = request.get_json()
 
         product_data = {
@@ -48,6 +60,7 @@ def create_product () :
         return jsonify({
             'message' : 'Product created successfully'
         }), 201
+    
     except Exception as error :
         current_app.logger.error(f'Error creating product: {str(error)}')
         return jsonify({
@@ -69,6 +82,7 @@ def product_show (id) :
             return jsonify({
                 'error': 'Product not found'
             }), 404
+        
     except Exception as error :
         current_app.logger.error(f'Error fetching product: {str(error)}')
         return jsonify({
