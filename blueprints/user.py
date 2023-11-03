@@ -4,18 +4,12 @@ import datetime
 
 
 from ..app import db, auth
-from ..auth import auth_user
+from ..api.auth import auth_user
 from ..models import User, Role
 
-from .cart_item import cart_item_bp, add_to_cart
-from .order import order_bp
-from .address import address_bp
+from .cart_item import create_item
 
 user_bp = Blueprint('user', __name__)
-
-user_bp.register_blueprint(cart_item_bp, url_prefix = '/cart')
-user_bp.register_blueprint(order_bp, url_prefix = '/order')
-user_bp.register_blueprint(address_bp, url_prefix = '/address')
 
 @user_bp.route('/signup', methods = ['POST'])
 def signup () :
@@ -42,16 +36,24 @@ def signup () :
         db.session.commit()
 
         shopping_cart = request.json.get('localStorageCart')
+        errors = []
         if shopping_cart :
             for item in shopping_cart :
                 data = {
                     'id': item.get('productId'),
                     'qty': item.get('quantity')
                 }
-                response = add_to_cart(data = data, user = new_user)
+                response = create_item(data = data, user = new_user)
+                if not response['success'] :
+                    errors.append(f"Error adding item with ID {data['id']} to the cart")
+
+        cartError = ''
+        if errors :
+            cartError = ', '.join(errors)
 
         return jsonify({
-            'message': 'User registered successfully'
+            'message': 'User registered successfully',
+            'cartError': cartError
         }), 201
     
     except Exception as error :
@@ -79,16 +81,24 @@ def login () :
         
         else :
             shopping_cart = request.json.get('localStorageCart')
+            errors = []
             if shopping_cart :
                 for item in shopping_cart :
                     data = {
                         'id': item.get('productId'),
                         'qty': item.get('quantity')
                     }
-                    response = add_to_cart(data = data, user = user)
+                    response = create_item(data = data, user = user)
+                    if not response['success'] :
+                        errors.append(f"Error adding item with ID {data['id']} to the cart")
 
+            cartError = ''
+            if errors :
+                cartError = ', '.join(errors)
+                
             return jsonify({
-                'message': 'User logged in successfully'
+                'message': 'User logged in successfully',
+                'cartError': cartError
             }), 200
         
     except Exception as error :

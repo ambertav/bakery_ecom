@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, current_app
 from flask_cors import cross_origin
 
 from ..app import db
-from ..auth import auth_user
+from ..api.auth import auth_user
 from ..models import User, Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
@@ -106,46 +106,61 @@ def update_quantity (id) :
 
 # create
 @cart_item_bp.route('/add', methods = ['POST'])
-def add_to_cart (data, user) :
+def add_to_cart () :
     try :
-        print(user)
+        data = request.get_json()
 
-        if user is None :
-            # retrieve token
-            token = request.headers['Authorization'].replace('Bearer ', '')
-            # retrieve and authenticate user
-            user = auth_user(token)
-            if user is None:
-                return jsonify({
-                    'error': 'Authentication failed'
-                }), 401
-            
-        if data is None :
-            data = request.get_json()
-            
-        print('running')
+        # retrieve token
+        token = request.headers['Authorization'].replace('Bearer ', '')
+        # retrieve and authenticate user
+        user = auth_user(token)
+        if user is None:
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        response = create_item(data, user) # adds to database, returns with boolean and message
+
+        if response['success'] == True:
+            return jsonify({
+                'message': response['message']
+            }), 201
+
+    except Exception as error :
+        current_app.logger.error(f'Error adding to cart: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+def create_item (data, user) : 
+    try :
         # ensure valid product
         product = Product.query.get(data.get('id'))
         if not product :
             return jsonify({
                 'error': 'Product not found'
-            }), 404
+            }), 404 
         
         # search users existing cart for an item with matching product id
         existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, ordered = False).first()
 
+        success = False 
+
         if existing_item :
             existing_item.quantity += data.get('qty') # update quantity instead of creating new cart item
+            success = True
         else :
             new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
             db.session.add(new_item)
+            success = True
 
         db.session.commit()
-        
-        return jsonify({
-            'message': 'Item added successfully'
-        }), 201
 
+        return {
+            'success': success,
+            'message': 'Item added successfully'
+        }
+    
     except Exception as error :
         current_app.logger.error(f'Error adding to cart: {str(error)}')
         return jsonify({
