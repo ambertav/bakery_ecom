@@ -7,7 +7,7 @@ from ..app import db, auth
 from ..auth import auth_user
 from ..models import User, Role
 
-from .cart_item import cart_item_bp
+from .cart_item import cart_item_bp, add_to_cart
 from .order import order_bp
 from .address import address_bp
 
@@ -28,8 +28,9 @@ def signup () :
 
         user_data = {}
         # assign all fields for user creation
-        user_data['name'] = request.data
+        user_data['name'] = request.json.get('name')
         user_data['firebase_uid'] = uid
+        user_data['stripe_customer_id'] = None
         user_data['billing_address'] = None
         user_data['shipping_address'] = None
         user_data['role'] = Role.CLIENT
@@ -37,8 +38,17 @@ def signup () :
 
         new_user = User(**user_data)
 
-        db.session.add(new_user)
+        db.session.add(new_user) 
         db.session.commit()
+
+        shopping_cart = request.json.get('localStorageCart')
+        if shopping_cart :
+            for item in shopping_cart :
+                data = {
+                    'id': item.get('productId'),
+                    'qty': item.get('quantity')
+                }
+                response = add_to_cart(data = data, user = new_user)
 
         return jsonify({
             'message': 'User registered successfully'
@@ -66,7 +76,17 @@ def login () :
             return jsonify({
                 'message': 'User not found'
             }), 404
+        
         else :
+            shopping_cart = request.json.get('localStorageCart')
+            if shopping_cart :
+                for item in shopping_cart :
+                    data = {
+                        'id': item.get('productId'),
+                        'qty': item.get('quantity')
+                    }
+                    response = add_to_cart(data = data, user = user)
+
             return jsonify({
                 'message': 'User logged in successfully'
             }), 200
