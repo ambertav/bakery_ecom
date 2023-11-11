@@ -167,12 +167,12 @@ class Order (db.Model) :
     stripe_payment_id = db.Column(db.String, nullable = True)
     shipping_method = db.Column(db.Enum(Ship_Method), nullable = False)
     payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
-    shipping_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), unique = False)
+    shipping_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id', ondelete = 'RESTRICT'), nullable = False)
 
     
     user = db.relationship('User', backref = 'orders')
     items = db.relationship('Cart_Item', secondary = order_cart_items, backref = 'orders')
-    address = db.relationship('Address', backref = 'orders')
+    address = db.relationship('Address', backref = 'orders', foreign_keys=[shipping_address_id])
 
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, shipping_method, payment_status, shipping_address_id) :
         self.user_id = user_id
@@ -185,11 +185,6 @@ class Order (db.Model) :
         self.shipping_address_id = shipping_address_id
 
     def as_dict (self) :
-        if self.address :
-            address_data = self.address.as_dict()
-        else :
-            address_data = {}
-
         return {
             'id': self.id,
             'totalPrice': self.total_price,
@@ -197,5 +192,5 @@ class Order (db.Model) :
             'status': serialize_enum(self.status),
             'shippingMethod': serialize_enum(self.shipping_method), 
             'paymentStatus': serialize_enum(self.payment_status),
-            'address': address_data,
+            'address': self.address.as_dict(),
         }

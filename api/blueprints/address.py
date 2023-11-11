@@ -107,6 +107,11 @@ def delete (id) :
     
     except Exception as error :
         current_app.logger.error(f'Error updating default address: {str(error)}')
+        if 'violates not-null constraint' in f'{str(error)}' :
+            return jsonify({
+                'error': 'Violates not null constraint',
+            }), 400
+        
         return jsonify({
-            'error': 'Internal server error'
+            'error': 'Internal server error',
         }), 500
