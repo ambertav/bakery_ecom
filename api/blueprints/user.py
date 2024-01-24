@@ -19,6 +19,11 @@ def signup () :
         decoded_token = auth.verify_id_token(token)
         uid = decoded_token['uid']
 
+        if not uid :
+            return jsonify({
+                'error': 'Firebase error'
+            }), 400
+
         user_data = {
             'name': request.json.get('name'),
             'firebase_uid': uid,
