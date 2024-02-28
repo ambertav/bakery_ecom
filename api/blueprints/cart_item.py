@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from flask_cors import cross_origin
 
-from ...app import db
+from ...database import db
 from ..utils.auth import auth_user
 from ..models.models import User, Product, Cart_Item
 

@@ -2,7 +2,8 @@ from flask import Blueprint, jsonify, request, current_app
 import stripe, json
 from datetime import datetime
 
-from ...app import db, webhook_secret
+from ...database import db
+from ...config import config
 from ..utils.auth import auth_user
 from ..models.models import User, Address, Cart_Item, Order, Order_Status, Pay_Status, Ship_Method
 
@@ -155,11 +156,11 @@ def handle_stripe_webhook () :
             success = False
         )
     
-    if webhook_secret :
+    if config['WEBHOOK_SECRET'] :
         sig_header = request.headers.get('Stripe-Signature')
         try :
             event = stripe.Webhook.construct_event(
-                payload, sig_header, webhook_secret
+                payload, sig_header, config['WEBHOOK_SECRET']
             )
         except stripe.error.SignatureVerificationError as error:
             current_app.logger.error(f'Webhook signature verification failed: {str(error)}')

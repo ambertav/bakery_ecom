@@ -1,8 +1,9 @@
 from flask import Blueprint, jsonify, request, current_app
+from firebase_admin import auth
 import datetime
 
 
-from ...app import db, auth
+from ...database import db
 from ..utils.auth import auth_user
 from ..models.models import User, Role
 

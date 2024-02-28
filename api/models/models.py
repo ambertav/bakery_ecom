@@ -1,4 +1,4 @@
-from ...app import db
+from ...database import db
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey
 from enum import Enum

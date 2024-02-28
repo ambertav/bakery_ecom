@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 
-from ...app import db
+from ...database import db
 from ..utils.auth import auth_user
 from ..models.models import Product, Role
 
@@ -63,7 +63,7 @@ def create_product () :
     except Exception as error :
         current_app.logger.error(f'Error creating product: {str(error)}')
         return jsonify({
-            'error': 'Internal server error'
+            'error': error
         }), 500
     
 @product_bp.route('/<int:id>', methods = ['GET'])
