@@ -54,7 +54,7 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
     response = flask_app.post('/api/product/create', headers = {
             'Authorization': f'Bearer {test_uid}'
     }, json = {
-        'name': 'Test Product',
+        'name': 'Admin Test Product',
         'description': 'Test Description',
         'image': 'test.jpg',
         'price': 10.0,
@@ -69,7 +69,12 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
         # client user should get access forbidden
         assert response.status_code == 403
         assert response.json['error'] == 'Forbidden'
-        # should add product count assertion checking db doesn't create
+    
+    # runs for both tests to assert only admin's creation should go through
+    count_of_products = Product.query.filter_by(name = 'Admin Test Product').count()
+    assert count_of_products is 1
+
+
         
 
 
@@ -83,7 +88,7 @@ def test_product_index (flask_app) :
 
 
 def test_product_show (flask_app) :
-    product = Product.query.filter_by(name = 'Test Product').first()
+    product = Product.query.filter_by(name = 'Product 1').first()
     assert product is not None
 
     # convert price to a string for last assertions against response product
