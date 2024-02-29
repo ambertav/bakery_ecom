@@ -1,4 +1,5 @@
 import pytest, datetime, uuid, firebase_admin
+from sqlalchemy.sql.expression import delete
 from firebase_admin import auth
 
 from ..app import create_app
@@ -21,6 +22,38 @@ def flask_app () :
     yield client
 
     ctx.pop()
+
+@pytest.fixture(scope = 'session', autouse = True)
+def database_cleanup (flask_app) :
+    # yield for tests to complete
+    yield 
+
+    # start database connection
+    engine = db.get_engine(app = flask_app)
+    connection = engine.connect()
+
+    # start transaction
+    transaction = connection.begin()
+
+    try :
+        # get table names
+        tables = db.metadata.tables.values()
+
+        # loop through and delete from each table
+        for table in tables :
+            connection.execute(delete(table))
+
+        # commit transaction
+        transaction.commit()
+
+    except Exception as error :
+        transaction.rollback() # if error, rollback
+        raise error
+    
+    finally :
+        # close connection
+        connection.close()
+
 
 @pytest.fixture(scope = 'session')
 def create_admin_user () :
