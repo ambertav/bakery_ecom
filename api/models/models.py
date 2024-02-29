@@ -1,6 +1,6 @@
 from ...database import db
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey, CheckConstraint
 from enum import Enum
 
 def serialize_enum (enum_value) :
@@ -12,11 +12,15 @@ class Product (db.Model) :
 
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(80), nullable = False)
-    description = db.Column(db.Text(), nullable = False)
+    description = db.Column(db.String(500), nullable = False)
     image = db.Column(db.String(), nullable = False)
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
     stock = db.Column(db.Integer(), nullable = False)
 
+    __table_args__ = (
+        CheckConstraint('stock >= 0', name = 'non_negative_stock'),
+        CheckConstraint('price >= 0', name = 'non_negative_price'),
+    )
 
     def __init__ (self, name, description, image, price, stock) :
         self.name = name
@@ -72,9 +76,13 @@ class Address (db.Model) :
     street = db.Column(db.String(255), nullable = False)
     city = db.Column(db.String(100), nullable = False)
     state = db.Column(db.String(2), nullable = False)
-    zip = db.Column(db.String(10), nullable = False)
+    zip = db.Column(db.String(5), nullable = False)
     default = db.Column(db.Boolean, nullable = False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False)
+
+    __table_args__ = (
+        CheckConstraint("LENGTH(zip) = 5 AND zip ~ '^[0-9]{5}$'", name = 'zip_format_constraint'),
+    )
 
     def __init__ (self, first_name, last_name, street, city, state, zip, default, user_id) :
         self.first_name = first_name
@@ -108,6 +116,10 @@ class Cart_Item (db.Model) :
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
     quantity = db.Column(db.Integer(), nullable = False)
     ordered = db.Column(db.Boolean(), default = False, nullable = False)
+
+    __table_args__ = (
+        CheckConstraint('quantity >= 1', name = 'non_negative_quantity'),
+    )
 
     # define relationships
     user = db.relationship('User', backref = 'cart_items')
