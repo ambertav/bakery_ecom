@@ -66,7 +66,7 @@ def login () :
             }), 404
         
         else :
-            shopping_cart = request.json.get('localStorageCart')
+            shopping_cart = request.json
             cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
                 
             return jsonify({
