@@ -40,7 +40,7 @@ def database_cleanup (flask_app) :
         tables = db.metadata.tables.values()
 
         # loop through and delete from each table
-        for table in tables :
+        for table in reversed(tables) :
             connection.execute(delete(table))
 
         # commit transaction
