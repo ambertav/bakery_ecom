@@ -58,7 +58,7 @@ def delete_cart_item (id) :
         db.session.delete(cart_item)
         db.session.commit()
         return jsonify({
-            'message': ' Item deleted from cart successfully'
+            'message': 'Item deleted from cart successfully'
         }), 200
 
     except Exception as error :
@@ -88,7 +88,9 @@ def update_quantity (id) :
                 'error': 'Item not found in cart'
             }), 404
         else :
-            if new_quantity == 0 :
+            if new_quantity < 0 :
+                raise ValueError('Invalid quantity provided')
+            elif new_quantity == 0 :
                 db.session.delete(cart_item)
             else :
                 cart_item.quantity = new_quantity
@@ -98,6 +100,12 @@ def update_quantity (id) :
                 'message': 'Item quantity updated successfully'
             }), 200
             
+    except ValueError :
+            db.session.rollback()
+            return jsonify({
+                'error': 'Invalid quantity provided'
+            }), 400
+    
     except Exception as error :
         current_app.logger.error(f'Error updating item in cart: {str(error)}')
         return jsonify({
@@ -124,6 +132,10 @@ def add_to_cart () :
             return jsonify({
                 'message': response['message']
             }), 201
+        else :
+            return jsonify({
+                'error': 'Product not found'
+            }), 404
 
     except Exception as error :
         current_app.logger.error(f'Error adding to cart: {str(error)}')
@@ -135,15 +147,15 @@ def create_item (data, user) :
     try :
         # ensure valid product
         product = Product.query.get(data.get('id'))
+
         if not product :
-            return jsonify({
-                'error': 'Product not found'
-            }), 404 
+            return {
+                'success': False,
+                'message': 'Product not found'
+            }
         
         # search users existing cart for an item with matching product id
         existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, ordered = False).first()
-
-        success = False 
 
         if existing_item :
             existing_item.quantity += data.get('qty') # update quantity instead of creating new cart item
