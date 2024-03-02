@@ -3,6 +3,7 @@ import pytest, random
 from ..database import db
 from ..api.models.models import Cart_Item, Product
 
+
 @pytest.fixture(scope = 'module')
 def seed_products (flask_app) :
     products_data = [
@@ -42,15 +43,8 @@ def seed_products (flask_app) :
     finally:
         session.rollback()
         session.close()
-
-
-
-# for use to determine a random quantity for cart item, given as range of 1 to 10 for simplicity
-def generate_random_quantity () :
-    return random.randint(1, 10)
-
-
  
+
 # creating cart item, scenario: logged in + adding to cart
 @pytest.mark.parametrize('valid_product', [True, False])
 def test_cart_item_creation (flask_app, create_client_user, seed_products, valid_product) :
@@ -83,7 +77,6 @@ def test_cart_item_creation (flask_app, create_client_user, seed_products, valid
 
     cart_item_count = Cart_Item.query.filter_by(user_id = user.id).count()
     assert cart_item_count is 1
-
 
 
 # creating cart item, scenario: user has items in cart and then logs in / signs up
@@ -130,7 +123,7 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
 
         assert cart_items[i].quantity == expected_quantity
 
-        
+
 def test_view_cart (flask_app, create_client_user) :
     # creating user, query for all of user's cart items
     user, test_uid = create_client_user
@@ -232,3 +225,11 @@ def test_delete_cart_item (flask_app, create_client_user, valid_id) :
     else :
         assert response.status_code == 404
         assert response.json['error'] == 'Item not found in cart'
+
+
+
+# ---- helpers ----
+
+# for use to determine a random quantity for cart item, given as range of 1 to 10 for simplicity
+def generate_random_quantity () :
+    return random.randint(1, 10)
