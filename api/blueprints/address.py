@@ -65,7 +65,7 @@ def update_default (id) :
         
         else :
             return jsonify({
-                'message': 'Address not found'
+                'error': 'Address not found'
             }), 404
 
     except Exception as error :
@@ -108,6 +108,7 @@ def delete (id) :
     except Exception as error :
         current_app.logger.error(f'Error updating default address: {str(error)}')
         if 'violates not-null constraint' in f'{str(error)}' :
+            db.session.rollback()
             return jsonify({
                 'error': 'Violates not null constraint',
             }), 400
