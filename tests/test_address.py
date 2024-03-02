@@ -1,4 +1,4 @@
-import pytest, datetime
+import pytest, unittest, datetime
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError
 
@@ -81,21 +81,30 @@ def test_address_validation (flask_app, create_client_user, first_name, last_nam
         assert error.type in (IntegrityError, DataError) # assert IntegrityError
 
 
-# get all addresses
-    # takes possible request args of default=true --> just returns default address
-    # if no default=true, returns all addresses with default at the top
-def test_get_address (flask_app, create_client_user, seed_addresses) :
+@pytest.mark.parametrize('requesting_default', (True, False))
+def test_get_address (flask_app, create_client_user, seed_addresses, requesting_default) :
     # create user and get list of addresses
     user, test_uid = create_client_user
     addresses = seed_addresses
 
-    response = flask_app.get('/api/address/', headers = {'Authorization': f'Bearer {test_uid}'})
+    # if user requesting default, query param of default=true
+    query_params = { 'default': 'true' } if requesting_default else {}
 
+    response = flask_app.get('/api/address/', headers = {'Authorization': f'Bearer {test_uid}'}, query_string = query_params)
+    
     assert response.status_code in [200, 308]
-    assert len(response.json['addresses']) == len(addresses)
+
+    # if default=true query param
+    if requesting_default :
+        # query for default address, assert that its same as response 
+        default_address = Address.query.filter_by(user_id = user.id, default = True).all()
+        unittest.TestCase().assertDictEqual(default_address[0].as_dict(), response.json['addresses'])
+
+    else :
+        # asserting that response sends all the addresses
+        assert len(response.json['addresses']) == len(addresses)
 
 
-# change address to default
 @pytest.mark.parametrize('valid_address', [(True), (False)])
 def test_update_default (flask_app, create_client_user, seed_addresses, valid_address) :
     # create user and get list of addresses
