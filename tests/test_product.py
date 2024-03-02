@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from ..database import db
 from ..api.models.models import Product
 
+
 # model validation tests
 @pytest.mark.parametrize('name, description, image, price, stock, valid', [
     ('Product 1', 'Description 1', 'image.png', 10.00, 100, True),  # valid
@@ -13,30 +14,13 @@ from ..api.models.models import Product
 def test_product_validation(flask_app, name, description, image, price, stock, valid) :
     if valid :
         # base case with valid data, should create product
-        product = Product(
-            name = name,
-            description = description,
-            image = image,
-            price = price,
-            stock = stock
-        )
-        db.session.add(product)
-        db.session.commit()
-
-        assert product is not None
+        create_and_add_product(name, description, image, price, stock)
+        added_product = Product.query.filter_by(name = name).first()
+        assert added_product is not None
     else:
         # testing column constraints by asserting presence of IntegrityError
         with pytest.raises(IntegrityError) as error :
-            product = Product(
-                name = name,
-                description = description,
-                image = image,
-                price = price,
-                stock = stock
-            )
-            db.session.add(product)
-            db.session.commit()
-
+            create_and_add_product(name, description, image, price, stock)
         db.session.rollback() # rollback failed transaction in database 
         assert error.type is IntegrityError # assert IntegrityError
 
@@ -75,9 +59,6 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
     assert count_of_products is 1
 
 
-        
-
-
 def test_product_index (flask_app) :
     count_of_products = Product.query.count()
 
@@ -85,7 +66,6 @@ def test_product_index (flask_app) :
 
     assert response.status_code in [200, 308]
     assert len(response.json['products']) == count_of_products
-
 
 def test_product_show (flask_app) :
     product = Product.query.filter_by(name = 'Product 1').first()
@@ -98,3 +78,19 @@ def test_product_show (flask_app) :
 
     assert response.status_code in [200, 308]
     unittest.TestCase().assertDictEqual(product.as_dict(), response.json['product'])
+
+
+# ---- helpers ----
+
+def create_and_add_product(name, description, image, price, stock) :
+    product = Product(
+        name = name,
+        description = description,
+        image = image,
+        price = price,
+        stock = stock
+    )
+    db.session.add(product)
+    db.session.commit()
+
+    return product
