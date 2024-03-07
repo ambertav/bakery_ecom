@@ -102,7 +102,10 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
 
     response = flask_app.post('/api/user/login', 
         headers = { 'Authorization': f'Bearer {test_uid}' },
-        json = localStorageCart
+        json = {
+            'name': 'test',
+            'localStorageCart': localStorageCart
+        }
     )
 
     assert response.status_code == 200
