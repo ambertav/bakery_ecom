@@ -1,10 +1,10 @@
-import pytest, datetime, uuid, firebase_admin
+import pytest, datetime, uuid
 from sqlalchemy.sql.expression import delete
 from firebase_admin import auth
 
 from ..app import create_app
 from ..database import db
-from ..api.models.models import User, Role
+from ..api.models.models import User, Role, Address, Product, Cart_Item, Order, order_cart_items
 
 def generate_firebase_uid():
     uid = str(uuid.uuid4())
@@ -36,11 +36,18 @@ def database_cleanup (flask_app) :
     transaction = connection.begin()
 
     try :
-        # get table names
-        tables = db.metadata.tables.values()
+        # list of tables in order for successful cascade deletion
+        tables_in_cascade_deletion_order = [
+            order_cart_items,
+            Order,
+            Cart_Item,
+            Product,
+            Address,
+            User
+        ]
 
         # loop through and delete from each table
-        for table in reversed(tables) :
+        for table in tables_in_cascade_deletion_order :
             connection.execute(delete(table))
 
         # commit transaction
