@@ -11,7 +11,10 @@ def test_signup (flask_app) :
         mock_verify_id_token.return_value = { 'uid': 'mock_uid' }
         input_data = { 'name': 'Test' }
 
-        response = flask_app.post('/api/user/signup', headers = {'Authorization': f'Bearer mock_uid'}, json = input_data)
+        response = flask_app.post('/api/user/signup',
+            headers = { 'Authorization': f'Bearer mock_uid' },
+            json = input_data,
+        )
 
     assert response.status_code == 201
     assert response.json['message'] == 'User registered successfully'
@@ -27,10 +30,13 @@ def test_login (flask_app) :
     with patch('firebase_admin.auth.verify_id_token') as mock_verify_id_token :
         mock_verify_id_token.return_value = { 'uid': created_user.firebase_uid }
 
-        response = flask_app.post('/api/user/login', headers = {'Authorization': f'Bearer {created_user.firebase_uid}'}, json = {
-            'name': '',
-            'localStorageCart': None
-        })
+        response = flask_app.post('/api/user/login',
+            headers = { 'Authorization': f'Bearer {created_user.firebase_uid}' },
+            json = {
+                'name': '',
+                'localStorageCart': None
+            },
+        )
 
     assert response.status_code == 200
     assert response.json['message'] == 'User logged in successfully'

@@ -1,4 +1,7 @@
-import pytest, unittest
+import pytest
+import unittest
+
+from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import IntegrityError
 
 from ..database import db
@@ -35,15 +38,17 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
         user, test_uid = create_client_user
 
     # req to create product
-    response = flask_app.post('/api/product/create', headers = {
-            'Authorization': f'Bearer {test_uid}'
-    }, json = {
-        'name': 'Admin Test Product',
-        'description': 'Test Description',
-        'image': 'test.jpg',
-        'price': 10.0,
-        'stock': 100
-    })
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.post('/api/product/create', 
+            headers = { 'Authorization': f'Bearer {test_uid}' }, 
+            json = {
+                'name': 'Admin Test Product',
+                'description': 'Test Description',
+                'image': 'test.jpg',
+                'price': 10.0,
+                'stock': 100
+            },
+        )
 
     if role == 'ADMIN' :
         # admin user should create product

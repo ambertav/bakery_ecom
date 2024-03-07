@@ -1,4 +1,8 @@
-import pytest, unittest, datetime
+import pytest
+import unittest
+import datetime
+
+from unittest.mock import patch, MagicMock
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError
 
@@ -10,30 +14,32 @@ from ..api.models.models import Address, Order, Order_Status, Ship_Method, Pay_S
 def seed_addresses (flask_app, create_client_user) :
     user, test_uid = create_client_user
 
-    address_data = [{
-        'first_name': 'Emily',
-        'last_name': 'Smith',
-        'street': '123 Main St',
-        'city': 'Anytown',
-        'state': 'NY',
-        'zip': '10001'
-    },
-    {
-        'first_name': 'Sophia', 
-        'last_name': 'Williams',
-        'street': '456 Elm St',
-        'city': 'Sometown',
-        'state': 'CA',
-        'zip': '90001'
-    },
-    {
-        'first_name': 'Alice',
-        'last_name': 'Johnson',
-        'street': '789 Oak St',
-        'city': 'Othertown',
-        'state': 'TX',
-        'zip': '75001'
-    }]
+    address_data = [
+        {
+            'first_name': 'Emily',
+            'last_name': 'Smith',
+            'street': '123 Main St',
+            'city': 'Anytown',
+            'state': 'NY',
+            'zip': '10001'
+        },
+        {
+            'first_name': 'Sophia', 
+            'last_name': 'Williams',
+            'street': '456 Elm St',
+            'city': 'Sometown',
+            'state': 'CA',
+            'zip': '90001'
+        },
+        {
+            'first_name': 'Alice',
+            'last_name': 'Johnson',
+            'street': '789 Oak St',
+            'city': 'Othertown',
+            'state': 'TX',
+            'zip': '75001'
+        },
+    ]
 
     for address in address_data :
         address['default'] = False
@@ -90,7 +96,11 @@ def test_get_address (flask_app, create_client_user, seed_addresses, requesting_
     # if user requesting default, query param of default=true
     query_params = { 'default': 'true' } if requesting_default else {}
 
-    response = flask_app.get('/api/address/', headers = {'Authorization': f'Bearer {test_uid}'}, query_string = query_params)
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get('/api/address/',
+            headers = { 'Authorization': f'Bearer {test_uid}' }, 
+            query_string = query_params,
+        )
     
     assert response.status_code in [200, 308]
 
@@ -122,7 +132,10 @@ def test_update_default (flask_app, create_client_user, seed_addresses, valid_ad
         # otherwise, initialize id with an invalid id
         address_id = 0
 
-    response = flask_app.put(f'/api/address/default/{address_id}', headers = {'Authorization': f'Bearer {test_uid}'})
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/address/default/{address_id}',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
 
     if valid_address :
         assert response.status_code == 200
@@ -164,7 +177,10 @@ def test_delete_address (flask_app, create_client_user, seed_addresses, valid_id
     else :
         address_id = 0
 
-    response = flask_app.delete(f'/api/address/{address_id}/delete', headers = {'Authorization': f'Bearer {test_uid}'})
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.delete(f'/api/address/{address_id}/delete',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
 
     if valid_id :
         if used_for_order :

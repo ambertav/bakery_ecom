@@ -1,4 +1,7 @@
-import pytest, random
+import pytest
+import random
+
+from unittest.mock import patch, MagicMock
 
 from ..database import db
 from ..api.models.models import Cart_Item, Product
@@ -59,14 +62,14 @@ def test_cart_item_creation (flask_app, create_client_user, seed_products, valid
         # otherwise, initialize id with an invalid id
         id = 0
 
-
-    response = flask_app.post('/api/cart/add', 
-        headers = { 'Authorization': f'Bearer {test_uid}' },
-        json = { 
-            'id': id,
-            'qty': generate_random_quantity()
-        }
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.post('/api/cart/add', 
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            json = { 
+                'id': id,
+                'qty': generate_random_quantity()
+            },
+        )
 
     if valid_product :
         assert response.status_code == 201
@@ -92,21 +95,25 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
     # creating local storage cart with:
         # product id that matches the product id of an existing cart_item
         # product id that does not match 
-    localStorageCart = [{
-        'productId': products[0].id,
-        'quantity': 4
-    }, {
+    localStorageCart = [
+        {
+            'productId': products[0].id,
+            'quantity': 4
+        }, 
+        {
         'productId': products[1].id,
         'quantity': 2
-    }]
+        },
+    ]
 
-    response = flask_app.post('/api/user/login', 
-        headers = { 'Authorization': f'Bearer {test_uid}' },
-        json = {
-            'name': 'test',
-            'localStorageCart': localStorageCart
-        }
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.post('/api/user/login', 
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            json = {
+                'name': 'test',
+                'localStorageCart': localStorageCart
+            },
+        )
 
     assert response.status_code == 200
     assert response.json['message'] == 'User logged in successfully'
@@ -132,9 +139,10 @@ def test_view_cart (flask_app, create_client_user) :
     user, test_uid = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    response = flask_app.get('/api/cart/', 
-        headers = { 'Authorization': f'Bearer {test_uid}' },
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get('/api/cart/', 
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
 
     assert response.status_code in [200, 308]
     # assert response returns all cart items
@@ -161,12 +169,13 @@ def test_update_cart_item_quantity (flask_app, create_client_user, valid_id, new
     else :
         item_id = 0
 
-    response = flask_app.put(f'/api/cart/{item_id}/update', 
-        headers = { 'Authorization': f'Bearer {test_uid}' },
-        json = {
-            'newQty': new_qty
-        }
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/cart/{item_id}/update', 
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            json = {
+                'newQty': new_qty
+            },
+        )
 
     if valid_id and new_qty >= 0 :
         assert response.status_code == 200
@@ -210,9 +219,10 @@ def test_delete_cart_item (flask_app, create_client_user, valid_id) :
     else :
         item_id = 0
 
-    response = flask_app.delete(f'/api/cart/{item_id}/delete', 
-            headers = { 'Authorization': f'Bearer {test_uid}' }
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.delete(f'/api/cart/{item_id}/delete', 
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
 
     if valid_id :
         assert response.status_code == 200

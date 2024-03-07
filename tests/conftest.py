@@ -1,6 +1,5 @@
 import pytest, datetime, uuid
 from sqlalchemy.sql.expression import delete
-from firebase_admin import auth
 
 from ..app import create_app
 from ..database import db

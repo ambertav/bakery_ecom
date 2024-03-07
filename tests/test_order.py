@@ -1,5 +1,9 @@
-import pytest, unittest, json, datetime
-from unittest.mock import patch
+import pytest
+import unittest
+import json
+import datetime
+
+from unittest.mock import patch, MagicMock
 
 from ..database import db
 from ..config import config
@@ -66,18 +70,21 @@ def test_create_checkout_session (flask_app, create_client_user, seed_database, 
             'state': 'NY',
             'zip': '10001',
         }
+
     else :
         # if not case of new address, use existing
         shipping = address.as_dict()
 
-    response = flask_app.post('/api/order/create-checkout-session', headers = {'Authorization': f'Bearer {test_uid}'},
-        json = {
-        'cart': [cart_item.as_dict()],
-        'method': 'STANDARD',
-        'billing': address.as_dict(),
-        'shipping': shipping
-        }
-    )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.post('/api/order/create-checkout-session',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            json = {
+                'cart': [cart_item.as_dict()],
+                'method': 'STANDARD',
+                'billing': address.as_dict(),
+                'shipping': shipping
+            },
+        )
 
     assert response.status_code == 200
     assert response.json['checkout_url'] is not None
@@ -114,16 +121,17 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
 
     # mock the webhook secret
     with patch.dict(config, {'WEBHOOK_SECRET': 'mock_webhook_secret'}) :
+        with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
         # mock the stripe event
-        with patch('stripe.Webhook.construct_event') as mock_construct_event :
-            # return the mock payload data 
-            mock_construct_event.return_value = mock_payload_data
+            with patch('stripe.Webhook.construct_event') as mock_construct_event :
+                # return the mock payload data 
+                mock_construct_event.return_value = mock_payload_data
 
-            # making request
-            response = flask_app.post('/api/order/stripe-webhook',
-                headers = {'Authorization': f'Bearer {test_uid}'},
-                json = json.dumps(mock_payload_data)
-            )
+                # making request
+                response = flask_app.post('/api/order/stripe-webhook',
+                    headers = { 'Authorization': f'Bearer {test_uid}' },
+                    json = json.dumps(mock_payload_data)
+                )
 
     assert response.status_code == 200
     assert response.json['success'] == True
@@ -162,7 +170,11 @@ def test_order_history (flask_app, create_client_user, seed_database, requesting
     # if user is requesting most recent orders, query param of recent=true
     query_params = { 'recent': 'true' } if requesting_recents else {}
 
-    response = flask_app.get('/api/order/', headers = {'Authorization': f'Bearer {test_uid}'}, query_string = query_params)
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get('/api/order/',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            query_string = query_params,
+        )
 
     assert response.status_code in [200, 308]
 
@@ -194,7 +206,10 @@ def test_show_order (flask_app, create_client_user) :
         for item in order.items
     ]
 
-    response = flask_app.get(f'/api/order/{order.id}', headers = {'Authorization': f'Bearer {test_uid}'})
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get(f'/api/order/{order.id}',
+            headers = { 'Authorization': f'Bearer {test_uid}' }
+        )
 
     assert response.status_code in [200, 308]
     unittest.TestCase().assertDictEqual(order_dict, response.json['order'])
