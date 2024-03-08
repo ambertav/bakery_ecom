@@ -48,7 +48,7 @@ def create_product () :
         data = request.get_json()
 
         product_data = {
-            key: data.get(key) for key in ['name', 'description', 'image', 'price', 'stock']
+            key: data.get(key) for key in ['name', 'description', 'category', 'image', 'price', 'stock']
         }
 
         new_product = Product(**product_data)

@@ -7,7 +7,7 @@ from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError
 
 from ..database import db
-from ..api.models.models import Address, Order, Order_Status, Ship_Method, Pay_Status
+from ..api.models.models import Address, Order, Order_Status, Deliver_Method, Pay_Status
 
 
 @pytest.fixture(scope = 'module')
@@ -235,7 +235,7 @@ def create_order_and_associate_address (address_id, user_id) :
         date = datetime.datetime.now(),
         status = Order_Status.PENDING,
         stripe_payment_id = None,
-        shipping_method = Ship_Method.STANDARD,
+        delivery_method = Deliver_Method.STANDARD,
         payment_status = Pay_Status.PENDING,
         shipping_address_id = address_id
     )

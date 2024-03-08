@@ -3,7 +3,7 @@ from sqlalchemy.sql.expression import delete
 
 from ..app import create_app
 from ..database import db
-from ..api.models.models import User, Role, Address, Product, Cart_Item, Order, order_cart_items
+from ..api.models.models import User, Role, Address, Product, Cart_Item, Order
 
 def generate_firebase_uid():
     uid = str(uuid.uuid4())
@@ -37,7 +37,6 @@ def database_cleanup (flask_app) :
     try :
         # list of tables in order for successful cascade deletion
         tables_in_cascade_deletion_order = [
-            order_cart_items,
             Order,
             Cart_Item,
             Product,
