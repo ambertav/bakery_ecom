@@ -41,7 +41,11 @@ def signup () :
         db.session.commit()
 
         shopping_cart = request.json.get('localStorageCart')
-        cartError = process_shopping_cart(shopping_cart, new_user) # formats local storage cart to create cart item, returns errors if any
+
+        if shopping_cart :
+            cartError = process_shopping_cart(shopping_cart, new_user) # formats local storage cart to create cart item, returns errors if any
+        else :
+            cartError = None
 
         return jsonify({
             'message': 'User registered successfully',
@@ -66,8 +70,11 @@ def login () :
             }), 404
         
         else :
-            shopping_cart = request.json
-            cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
+            shopping_cart = request.json.get('localStorageCart')
+            if shopping_cart :
+                cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
+            else :
+                cartError = None
                 
             return jsonify({
                 'message': 'User logged in successfully',
@@ -87,7 +94,8 @@ def process_shopping_cart(shopping_cart, user) :
         for item in shopping_cart :
             data = {
                 'id': item.get('productId'),
-                'qty': item.get('quantity')
+                'qty': item.get('quantity'),
+                'portion': item.get('portion'),
             }
             response = create_item(data, user) # creates cart item for each item in shopping cart
             if not response['success'] :

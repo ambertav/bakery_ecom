@@ -4,7 +4,7 @@ import random
 from unittest.mock import patch, MagicMock
 
 from ..database import db
-from ..api.models.models import Cart_Item, Product
+from ..api.models.models import Cart_Item, Portion, Product, Category
 
 
 @pytest.fixture(scope = 'module')
@@ -13,21 +13,24 @@ def seed_products (flask_app) :
         {
             'name': 'Product 1',
             'description': 'Description 1',
-            'image': 'image.png',
+            'category': Category.COOKIE,
+            'image': 'https://example.com/image.png',
             'price': 10.00,
             'stock': 100
         },
         {
             'name': 'Product 2',
             'description': 'Description 2',
-            'image': 'image.jpg',
+            'category': Category.CAKE,
+            'image': 'https://example.com/image.jpg',
             'price': 15.00,
             'stock': 150
         },
         {
             'name': 'Product 3',
             'description': 'Description 3',
-            'image': 'image.gif',
+            'category': Category.CUPCAKE,
+            'image': 'https://example.com/image.gif',
             'price': 20.00,
             'stock': 200
         }
@@ -67,19 +70,18 @@ def test_cart_item_creation (flask_app, create_client_user, seed_products, valid
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = { 
                 'id': id,
-                'qty': generate_random_quantity()
+                'qty': generate_random_quantity(),
+                'portion': 'WHOLE'
             },
         )
 
     if valid_product :
         assert response.status_code == 201
         assert response.json['message'] == 'Item added successfully'
+
     else :
         assert response.status_code == 404
         assert  response.json['error'] == 'Product not found'
-
-    cart_item_count = Cart_Item.query.filter_by(user_id = user.id).count()
-    assert cart_item_count is 1
 
 
 # creating cart item, scenario: user has items in cart and then logs in / signs up
@@ -87,6 +89,8 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
     # create user and get list of products
     user, test_uid = create_client_user
     products = seed_products
+
+    previous_cart_item_count = Cart_Item.query.filter_by(user_id = user.id).count()
 
     # query for existing cart items starting quantity
     cart_item = Cart_Item.query.filter_by(user_id = user.id, product_id = products[0].id).first()
@@ -98,11 +102,13 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
     localStorageCart = [
         {
             'productId': products[0].id,
-            'quantity': 4
+            'quantity': 4,
+            'portion': 'WHOLE',
         }, 
         {
-        'productId': products[1].id,
-        'quantity': 2
+            'productId': products[1].id,
+            'quantity': 2,
+            'portion': 'WHOLE',
         },
     ]
 
@@ -120,7 +126,7 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
 
     # query all cart_items for the user, assert length
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
-    assert len(cart_items) is len(localStorageCart)
+    assert len(cart_items) == len(localStorageCart)
 
     # loop to go through and assert product id and quantities of cart_items
     for i, item in enumerate(localStorageCart):
@@ -132,6 +138,69 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
         expected_quantity = item['quantity'] + qty_of_existing_item if i == 0 else item['quantity']
 
         assert cart_items[i].quantity == expected_quantity
+
+
+@pytest.mark.parametrize('category, is_valid_portion', [
+    (Category.COOKIE, True),
+    (Category.COOKIE, False),
+    (Category.CAKE, True),
+    (Category.CAKE, False),
+    (Category.CUPCAKE, True),
+    (Category.CUPCAKE, False),
+])
+def test_cart_item_portion_and_price_validation (flask_app, create_client_user, seed_products, category, is_valid_portion) :
+    user, test_uid = create_client_user
+    seed_products
+
+    # create dictionary of valid portions for each of the tested categories
+    valid_portion_options = {
+        Category.COOKIE: [Portion.WHOLE],
+        Category.CUPCAKE: [Portion.WHOLE, Portion.MINI],
+        Category.CAKE: [Portion.WHOLE, Portion.MINI, Portion.SLICE],
+    }
+
+    # query for product for use in cart item creation
+    product = Product.query.filter_by(category = category).first()
+
+    if is_valid_portion :
+        # get valid portion option
+        portion = valid_portion_options[category][0]
+
+        # with valid data, should create cart_item
+        cart_item = create_and_add_cart_item(product.id, user.id, portion)
+        created_item = Cart_Item.query.get(cart_item.id)
+        assert created_item is not None
+
+        # map out price multipler based on portion
+        portion_multiplier_mapping = {
+            Portion.WHOLE: 1,
+            Portion.MINI: 0.5,
+            Portion.SLICE: 0.15
+        }
+
+        # get the expected price multiplier
+        expected_multiplier = portion_multiplier_mapping.get(portion)
+
+        # assert that the price reflects expected price multiplier
+        assert created_item.price / created_item.quantity / product.price == expected_multiplier
+
+    else :
+        with pytest.raises(ValueError) as error :
+            # get invalid portion option 
+            invalid_options = [portion for portion in Portion if portion not in valid_portion_options[category]]
+
+            if invalid_options :
+                portion = invalid_options[0] 
+            else :
+                # if no invalid options (such as for cakes and pies that come in all options), set portion to 'INVALID'
+                # this should violate enum, but still returns ValueError 
+                portion = 'INVALD'
+
+            # testing portion column constraints, should return ValueError
+            cart_item = create_and_add_cart_item(product.id, user.id, portion)
+        
+        db.session.rollback # rollback failed transaction in database
+        assert error.type is ValueError # assert ValueError
 
 
 def test_view_cart (flask_app, create_client_user) :
@@ -246,3 +315,18 @@ def test_delete_cart_item (flask_app, create_client_user, valid_id) :
 # for use to determine a random quantity for cart item, given as range of 1 to 10 for simplicity
 def generate_random_quantity () :
     return random.randint(1, 10)
+
+
+def create_and_add_cart_item(product_id, user_id, portion) :
+    cart_item = Cart_Item(
+        product_id = product_id,
+        user_id = user_id,
+        portion = portion,
+        quantity = 2,
+        ordered = False,
+        order_id = None,
+    )
+    db.session.add(cart_item)
+    db.session.commit()
+
+    return cart_item

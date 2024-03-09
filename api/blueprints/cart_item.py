@@ -3,7 +3,7 @@ from flask_cors import cross_origin
 
 from ...database import db
 from ..utils.auth import auth_user
-from ..models.models import User, Product, Cart_Item
+from ..models.models import User, Product, Category, Cart_Item, Portion
 
 cart_item_bp = Blueprint('cart_item', __name__)
 
@@ -161,7 +161,15 @@ def create_item (data, user) :
             existing_item.quantity += data.get('qty') # update quantity instead of creating new cart item
             success = True
         else :
-            new_item = Cart_Item(user_id = user.id, product_id = product.id, quantity = data.get('qty'), ordered = False)
+            portion_mapping = {
+                'SLICE': Portion.SLICE,
+                'WHOLE': Portion.WHOLE,
+                'MINI': Portion.MINI
+            }
+
+            portion_selection = portion_mapping.get(data.get('portion'))
+
+            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion = portion_selection, quantity = data.get('qty'), ordered = False, order_id = None)
             db.session.add(new_item)
             success = True
 
