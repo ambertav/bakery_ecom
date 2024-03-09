@@ -1,11 +1,12 @@
 from flask import Blueprint, jsonify, request, current_app
-import stripe, json
-from datetime import datetime
+import stripe
+import json
+import datetime
 
 from ...database import db
 from ...config import config
 from ..utils.auth import auth_user
-from ..models.models import User, Address, Cart_Item, Order, Order_Status, Pay_Status, Ship_Method
+from ..models.models import User, Address, Cart_Item, Order, Order_Status, Pay_Status, Deliver_Method
 
 
 order_bp = Blueprint('order', __name__)
@@ -55,7 +56,6 @@ def show_order (id) :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        
         
         order = Order.query.filter_by(id = id, user_id = user.id).first()
 
@@ -162,6 +162,7 @@ def handle_stripe_webhook () :
             event = stripe.Webhook.construct_event(
                 payload, sig_header, config['WEBHOOK_SECRET']
             )
+
         except stripe.error.SignatureVerificationError as error:
             current_app.logger.error(f'Webhook signature verification failed: {str(error)}')
             return jsonify(
@@ -171,9 +172,9 @@ def handle_stripe_webhook () :
 
         if event and event['type'] == 'checkout.session.completed' :
             session = event['data']['object']
-            method = session.metadata.get('method')
-            user_id = session.metadata.get('user')
-            address_id = session.metadata.get('address_id')
+            method = session['metadata'].get('method')
+            user_id = session['metadata'].get('user')
+            address_id = session['metadata'].get('address_id')
 
             # create instance of order
             new_order = create_order(address_id, user_id, method)
@@ -182,11 +183,11 @@ def handle_stripe_webhook () :
 
             # associate stripe's customer id with user in database
             if user and not user.stripe_customer_id :
-                user.stripe_customer_id = session.customer
+                user.stripe_customer_id = session['customer']
 
             try :
                 # finalize order with payment info from stripe
-                new_order.stripe_payment_id = session.payment_intent
+                new_order.stripe_payment_id = session['payment_intent']
                 new_order.status =  Order_Status.PROCESSING
                 new_order.payment_status =  Pay_Status.COMPLETED
 
@@ -209,13 +210,14 @@ def create_order (address, user, method) :
     try :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
-        total = sum(item.product.price * item.quantity for item in items_to_associate)
+        total = sum(item.price for item in items_to_associate)
 
         # map out method string value to ship method enum value
         method_mapping = {
-            'STANDARD': Ship_Method.STANDARD,
-            'EXPRESS': Ship_Method.EXPRESS,
-            'NEXT_DAY': Ship_Method.NEXT_DAY,
+            'STANDARD': Deliver_Method.STANDARD,
+            'EXPRESS': Deliver_Method.EXPRESS,
+            'NEXT_DAY': Deliver_Method.NEXT_DAY,
+            'PICK_UP': Deliver_Method.PICK_UP
         }
 
         order_ship_method = method_mapping.get(method)
@@ -223,21 +225,26 @@ def create_order (address, user, method) :
         # create instance of order and associate with user
         new_order = Order(
             user_id = user,
-            date = datetime.now(),
+            date = datetime.datetime.now(),
             total_price = total,
             status = 'PENDING',
             stripe_payment_id = None,
-            shipping_method = order_ship_method,
+            delivery_method = order_ship_method,
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address,
         )
 
+
         db.session.add(new_order)
 
-        # associate cart items with order, and update cart_items to ordered
-        new_order.items.extend(items_to_associate)
+        # commit and refresh to get access to new_order.id
+        db.session.commit()
+        db.session.refresh(new_order)
+
+        # loop through items and update ordered boolean, associate to new order
         for item in items_to_associate :
             item.ordered = True
+            item.order_id = new_order.id
 
         db.session.commit()
         

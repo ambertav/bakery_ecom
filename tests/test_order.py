@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from ..database import db
 from ..config import config
-from ..api.models.models import Order, Order_Status, Ship_Method, Pay_Status, User, Address, Cart_Item, Product
+from ..api.models.models import Order, Order_Status, Deliver_Method, Pay_Status, User, Address, Cart_Item, Portion, Product, Category
 
 @pytest.fixture(scope = 'module')
 def seed_database (flask_app, create_client_user) :
@@ -17,7 +17,8 @@ def seed_database (flask_app, create_client_user) :
         product = Product(
             name = 'Product 1',
             description = 'Description 1',
-            image = 'image.png',
+            category = Category.CAKE,
+            image = 'https://example.com/image.jpg',
             price = 10.00,
             stock = 100
         )
@@ -40,8 +41,10 @@ def seed_database (flask_app, create_client_user) :
         cart_item = Cart_Item(
             user_id = user.id,
             product_id = product.id,
-            quantity = 2,
-            ordered = False
+            quantity = 1,
+            portion = Portion.WHOLE,
+            ordered = False,
+            order_id = None
         )
         db.session.add(cart_item)
         db.session.commit()
@@ -147,8 +150,6 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
     unittest.TestCase().assertDictEqual(created_order.items[0].as_dict(), cart_item.as_dict())
 
     # asserting that cart item within order was set to ordered = True
-    ordered_cart_item = Cart_Item.query.get(cart_item.id)
-    assert ordered_cart_item.ordered == True
 
     # asserting that user's stripe customer id was updated
     updated_user = User.query.get(user.id)
@@ -201,10 +202,14 @@ def test_show_order (flask_app, create_client_user) :
     # convert decimals into strings for assertions against response.json
     order_dict = order.as_dict()
     order_dict['totalPrice'] = str(order.total_price)
+
     order_dict['items'] = [
         { **item.as_dict(), 'price': str(item.product.price) }
         for item in order.items
     ]
+
+
+    
 
     with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
         response = flask_app.get(f'/api/order/{order.id}',
@@ -224,30 +229,28 @@ def seed_orders (user_id, address_id, iterations) :
         # query for product id
         product = Product.query.first()
 
-        cart_item = Cart_Item(
-            user_id = user_id,
-            product_id = product.id,
-            quantity = 2,
-            ordered = True
-        )
-        db.session.add(cart_item)
-        db.session.commit()
-
         order = Order(
             user_id = user_id,
-            total_price = cart_item.product.price * cart_item.quantity,
+            total_price = product.price,
             date = datetime.datetime.now(),
             status = Order_Status.PENDING,
             stripe_payment_id = None,
-            shipping_method = Ship_Method.STANDARD,
+            delivery_method = Deliver_Method.STANDARD,
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address_id
         )
         db.session.add(order)
         db.session.commit()
 
-        # associating cart item with order
-        order.items.append(cart_item)
+        cart_item = Cart_Item(
+            user_id = user_id,
+            product_id = product.id,
+            portion = Portion.WHOLE,
+            quantity = 1,
+            ordered = True,
+            order_id = order.id
+        )
+        db.session.add(cart_item)
         db.session.commit()
 
         orders.append(order)

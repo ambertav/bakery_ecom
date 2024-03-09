@@ -37,11 +37,11 @@ def database_cleanup (flask_app) :
     try :
         # list of tables in order for successful cascade deletion
         tables_in_cascade_deletion_order = [
-            Order,
             Cart_Item,
-            Product,
+            Order,
             Address,
-            User
+            User,
+            Product,
         ]
 
         # loop through and delete from each table
