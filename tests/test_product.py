@@ -1,5 +1,6 @@
 import pytest
 import unittest
+import random
 
 from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import IntegrityError
@@ -11,8 +12,8 @@ from ..api.models.models import Product, Category
 # model validation tests
 @pytest.mark.parametrize('name, description, category, image, price, stock, valid', [
     ('Product 1', 'Description 1', Category.CAKE, 'https://example.com/image.jpg', 10.00, 100, True),  # valid
-    ('Product 2', 'Description 2', Category.CAKE, 'https://example.com/image.jpg', -5.00, 100, False),  # invalid, violates negative price
-    ('Product 3', 'Description 3', Category.CAKE, 'https://example.com/image.jpg', 10.00, -100, False),  # invalid, violates negative stock
+    ('Product 2', 'Description 2', Category.CUPCAKE, 'https://example.com/image.jpg', -5.00, 100, False),  # invalid, violates negative price
+    ('Product 3', 'Description 3', Category.PIE, 'https://example.com/image.jpg', 10.00, -100, False),  # invalid, violates negative stock
     ('Product 4', 'Description 4', Category.CAKE, 'image.png', 10.00, 100, False),  # invalid, violates image string format
 ])
 def test_product_validation(flask_app, name, description, category, image, price, stock, valid) :
@@ -65,14 +66,45 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
     count_of_products = Product.query.filter_by(name = 'Admin Test Product').count()
     assert count_of_products is 1
 
+@pytest.mark.parametrize('requesting_category, searching', [
+    (False, False), # no category or search params
+    (True, False), # category param
+    (False, True), # search param
+    (True, True) # category and search param
+])
+def test_product_index (flask_app, requesting_category, searching) :
+    # initalize param strings
+    category_param = random.choice(list(Category)).value if requesting_category else ''
+    search_param = 'product 1' if searching else ''
 
-def test_product_index (flask_app) :
-    count_of_products = Product.query.count()
+    # construct params
+    query_params = { key: value for key, value in [('category', category_param), ('search', search_param)] if value }
 
-    response = flask_app.get('/api/product/')
+    response = flask_app.get('/api/product/', 
+        query_string = query_params
+    )
 
     assert response.status_code in [200, 308]
+
+    # base query for count of products
+    count_query = Product.query
+
+    # if category param, count products within that category
+    if requesting_category :
+        count_query = count_query.filter_by(category = category_param)
+    
+    # if search param, count products that match search
+    if searching :
+        count_query = count_query.filter(Product.name.ilike(f'%{search_param}%'))
+
+    # assert that length of response products equals count of products
+    count_of_products = count_query.count()
     assert len(response.json['products']) == count_of_products
+
+    # asserting message if no products
+    if count_of_products is 0 :
+        assert response.json['message'] == 'No products found'
+
 
 def test_product_show (flask_app) :
     product = Product.query.filter_by(name = 'Product 1').first()

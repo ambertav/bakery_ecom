@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, current_app
 
 from ...database import db
 from ..utils.auth import auth_user
-from ..models.models import Product, Role
+from ..models.models import Product, Category, Role
 
 product_bp = Blueprint('product', __name__)
 
@@ -10,19 +10,40 @@ product_bp = Blueprint('product', __name__)
 @product_bp.route('/', methods = ['GET'])
 def product_index () :
     try :
-        products = Product.query.all()
+        # extract page and params
+        page = request.args.get('page', 1, type = int)
+        category = request.args.get('category')
+        search = request.args.get('search')
 
-        if products :
-            # list of products in stock
-            products_list = [ product.as_dict() for product in products if product.stock > 0 ]
-        
+        # base query to build upon based on params 
+        base_query = Product.query
+
+        if category :
+            base_query = base_query.filter_by(category = Category[category])
+
+        if search :
+            base_query = base_query.filter(Product.name.ilike(f'%{search}%'))
+
+        # query with pagination
+        products = base_query.paginate(page = page, per_page = 10)
+
+        # if products are returned,
+        if products.items :
+            # format products using as_dict()
+            products_list = [ product.as_dict() for product in products.items if product.stock > 0 ]
+            
             return jsonify({
-                'products': products_list
+                'products': products_list,
+                'totalPages': products.pages,
+                'currentPage': page
             }), 200
+        
+        # otherwise, return empty array
         else :
             return jsonify({
-                'error': 'Products not found'
-            }), 404
+                'products': [],
+                'message': 'No products found'
+            }), 200
         
     except Exception as error :
         current_app.logger.error(f'Error fetching products: {str(error)}')
