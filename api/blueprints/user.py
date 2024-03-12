@@ -87,6 +87,28 @@ def login () :
             'error': 'Internal server error'
         }), 500
     
+@user_bp.route('/info', methods = ['GET'])
+def get_user_info () :
+    try :
+        user = auth_user(request)
+
+        if not user :
+            return jsonify({
+                'message': 'User not found'
+            }), 404
+        
+        # return user's name and admin status
+        return jsonify({
+            'name': user.name,
+            'isAdmin': True if user.role == Role.ADMIN else False
+        }), 200
+    
+    except Exception as error :
+        current_app.logger.error(f'Error retrieving user info: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
 
 def process_shopping_cart(shopping_cart, user) :
     errors = []
