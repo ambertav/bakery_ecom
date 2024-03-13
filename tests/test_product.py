@@ -119,6 +119,56 @@ def test_product_show (flask_app) :
     unittest.TestCase().assertDictEqual(product.as_dict(), response.json['product'])
 
 
+@pytest.mark.parametrize('role, valid_product', [
+    ('ADMIN', True),
+    ('ADMIN', False),
+    ('CLIENT', None),
+])
+def test_product_update (flask_app, create_admin_user, create_client_user, role, valid_product) :
+    # creates users with different roles
+    if role == 'ADMIN' :
+        user, test_uid = create_admin_user 
+    else :
+        user, test_uid = create_client_user
+
+    if valid_product :
+        product = Product.query.first()
+        product_id = product.id
+    else :
+        product_id = 0
+    
+    updated_data = {
+        'name': 'Updated product',
+        'description': 'updated description',
+        'stock': 999,
+    }
+
+    # req to edit product
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/product/{product_id}/update', 
+            headers = { 'Authorization': f'Bearer {test_uid}' }, 
+            json = updated_data
+        )
+    
+    if role == 'ADMIN' and valid_product :
+        assert response.status_code == 200
+        assert response.json['message'] == 'Product updated successfully'
+
+        updated_product = Product.query.get(product_id)
+
+        for field, value in updated_data.items():
+            assert getattr(updated_product, field) == value
+
+    elif role == 'ADMIN' and not valid_product :
+        assert response.status_code == 404
+        assert response.json['error'] == 'Product not found'
+
+    else :
+        assert response.status_code == 403
+        assert response.json['error'] == 'Forbidden'
+
+    
+
 # ---- helpers ----
 
 def create_and_add_product(name, description, category, image, price, stock) :

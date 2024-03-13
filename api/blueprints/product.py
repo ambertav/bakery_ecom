@@ -78,11 +78,52 @@ def create_product () :
         db.session.commit()
 
         return jsonify({
-            'message' : 'Product created successfully'
+            'message': 'Product created successfully'
         }), 201
     
     except Exception as error :
         current_app.logger.error(f'Error creating product: {str(error)}')
+        return jsonify({
+            'error': error
+        }), 500
+    
+
+@product_bp.route('/<int:id>/update', methods = ['PUT'])
+def product_update (id) :
+    try :
+        # retrieve token and auth user
+        user = auth_user(request)
+
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        elif user.role != Role.ADMIN :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
+
+        product = Product.query.get(id)
+
+        if product :
+            data = request.get_json()
+            for key, value in data.items() :
+                if hasattr(product, key) and getattr(product, key) != value :
+                    setattr(product, key, value)
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Product updated successfully'
+            }), 200
+        
+        else :
+            return jsonify({
+                'error': 'Product not found'
+            }), 404
+
+    except Exception as error :
+        current_app.logger.error(f'Error updating product: {str(error)}')
         return jsonify({
             'error': error
         }), 500
