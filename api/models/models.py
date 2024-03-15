@@ -27,7 +27,7 @@ class Product (db.Model) :
     name = db.Column(db.String(80), nullable = False)
     description = db.Column(db.String(500), nullable = False)
     category = db.Column(db.Enum(Category), nullable = False)
-    image = db.Column(db.String(), nullable = False)
+    image = db.Column(db.String(), nullable = False, default = 'https://example.com/default_image.jpg')
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
     stock = db.Column(db.Integer(), nullable = False)
 
@@ -41,7 +41,7 @@ class Product (db.Model) :
         self.name = name
         self.description = description
         self.category = category
-        self.image = image
+        self.image = image or 'https://example.com/default_image.jpg'
         self.price = price
         self.stock = stock
     
@@ -249,7 +249,7 @@ class Order (db.Model) :
 
     
     user = db.relationship('User', backref = 'orders')
-    items = db.relationship('Cart_Item', backref = 'orders')
+    cart_items = db.relationship('Cart_Item', backref = 'orders')
     address = db.relationship('Address', backref = 'orders', foreign_keys = [shipping_address_id])
 
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, delivery_method, payment_status, shipping_address_id) :
