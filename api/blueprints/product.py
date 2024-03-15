@@ -4,6 +4,8 @@ from ...database import db
 from ..utils.auth import auth_user
 from ..models.models import Product, Category, Role
 
+from ..utils.aws_s3 import s3_photo_upload
+
 product_bp = Blueprint('product', __name__)
 
 
@@ -76,8 +78,10 @@ def create_product () :
 
         db.session.add(new_product)
         db.session.commit()
+        db.session.refresh(new_product)
 
         return jsonify({
+            'product': new_product.as_dict(),
             'message': 'Product created successfully'
         }), 201
     
@@ -113,7 +117,10 @@ def product_update (id) :
                     setattr(product, key, value)
             db.session.commit()
 
+            db.session.refresh(product)
+
             return jsonify({
+                'product': product.as_dict(),
                 'message': 'Product updated successfully'
             }), 200
         
@@ -128,6 +135,40 @@ def product_update (id) :
             'error': error
         }), 500
     
+@product_bp.route('<int:id>/upload_photo', methods = ['POST'])
+def product_upload_photo (id) :
+    try :
+        print(request.files)
+        if 'image' not in request.files:
+            return jsonify({
+                'error': 'No image file found in request'
+            }), 400
+        
+        product = Product.query.get(id)
+
+        if not product :
+            return jsonify({
+                'error': 'Product not found'
+            }), 404
+
+        file = request.files.get('image')
+        image_url = s3_photo_upload(file, str(product.id))
+
+        if image_url :
+            product.image = image_url
+            db.session.commit()
+
+            return jsonify({
+                'message': 'Image uploaded successfully',
+            }), 200
+
+    except Exception as error :
+        current_app.logger.error(f'Error uploading product image: {str(error)}')
+        return jsonify({
+            'error': error
+        }), 500
+
+
 @product_bp.route('/<int:id>', methods = ['GET'])
 def product_show (id) :
     try :
