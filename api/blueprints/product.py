@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
+from sqlalchemy import text
 
 from ...database import db
 from ..utils.auth import auth_user
@@ -16,22 +17,38 @@ def product_index () :
         page = request.args.get('page', 1, type = int)
         category = request.args.get('category')
         search = request.args.get('search')
+        sort = request.args.get('sort')
 
         # base query to build upon based on params 
         base_query = Product.query
 
         if category :
-            base_query = base_query.filter_by(category = Category[category])
+            # adding cateogry filter to query, use uppercase for enum
+            base_query = base_query.filter_by(category = Category[category.upper()])
+
+        if sort and sort != 'recommended':
+            # to map sort options, utilizing text() in query
+            sort_options = {
+                'priceAsc': 'price ASC',
+                'priceDesc': 'price DESC',
+                'nameAsc': 'name ASC',
+                'nameDesc': 'name DESC',
+            }
+            
+            sort_option = sort_options.get(sort)
+
+            if sort_option :
+                # adding sort to query
+                base_query = base_query.order_by(text(sort_option))
 
         if search :
             base_query = base_query.filter(Product.name.ilike(f'%{search}%'))
 
-        # query with pagination
+        # applying query with pagination
         products = base_query.paginate(page = page, per_page = 10)
 
-        # if products are returned,
+        # if products are returned...
         if products.items :
-            # format products using as_dict()
             products_list = [ product.as_dict() for product in products.items if product.stock > 0 ]
             
             return jsonify({
