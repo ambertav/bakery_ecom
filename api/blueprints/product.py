@@ -49,7 +49,16 @@ def product_index () :
 
         # if products are returned...
         if products.items :
-            products_list = [ product.as_dict() for product in products.items if product.stock > 0 ]
+            
+            # determining if the user is an admin
+            user = auth_user(request)
+
+            if user and user.role == Role.ADMIN :
+                # if admin send all products, format using as_dict()
+                products_list = [ product.as_dict() for product in products.items ]
+            else :
+                # if no user or user is client, send only in stock products, format using as_dict()
+                products_list = [ product.as_dict() for product in products.items if product.stock > 0 ]
             
             return jsonify({
                 'products': products_list,

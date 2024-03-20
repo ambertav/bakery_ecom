@@ -4,6 +4,7 @@ import random
 
 from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
 from ..database import db
 from ..api.models.models import Product, Category
@@ -49,7 +50,7 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
                 'category': 'COOKIE',
                 'image': 'https://example.com/image.jpg',
                 'price': 10.0,
-                'stock': 100
+                'stock': 0
             },
         )
 
@@ -98,12 +99,38 @@ def test_product_index (flask_app, requesting_category, searching) :
         count_query = count_query.filter(Product.name.ilike(f'%{search_param}%'))
 
     # assert that length of response products equals count of products
-    count_of_products = count_query.count()
+    count_of_products = count_query.filter(Product.stock > 0).count()
     assert len(response.json['products']) == count_of_products
 
     # asserting message if no products
     if count_of_products is 0 :
+        unittest.TestCase().assertListEqual([], response.json['products'])
         assert response.json['message'] == 'No products found'
+
+
+@pytest.mark.parametrize('role', ['ADMIN', 'CLIENT'])
+def test_user_view_of_product_index (flask_app, create_admin_user, create_client_user, role) :
+    if role == 'ADMIN' :
+        user, test_uid = create_admin_user
+    else :
+        user, test_uid = create_client_user
+
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get('/api/product/', 
+            headers = { 'Authorization': f'Bearer {test_uid}' }, 
+        )
+    
+    assert response.status_code in [200, 308]
+
+    if role == 'ADMIN' :
+        # asserting that admin get out of stock products returned (all products)
+        count_of_products = Product.query.count()
+        assert len(response.json['products']) is count_of_products
+    
+    else :
+        # aasserting that clients only get in stock products
+        count_of_products = Product.query.filter(Product.stock > 0).count()
+        assert len(response.json['products']) is count_of_products
 
 
 def test_product_show (flask_app) :
