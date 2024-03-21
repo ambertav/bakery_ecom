@@ -79,6 +79,7 @@ def product_index () :
             'error': 'Internal server error'
         }), 500
 
+
 @product_bp.route('/create', methods = ['POST'])
 def create_product () :
     try :
@@ -161,10 +162,10 @@ def product_update (id) :
             'error': error
         }), 500
     
+
 @product_bp.route('<int:id>/upload_photo', methods = ['POST'])
 def product_upload_photo (id) :
     try :
-        print(request.files)
         if 'image' not in request.files:
             return jsonify({
                 'error': 'No image file found in request'
@@ -194,6 +195,53 @@ def product_upload_photo (id) :
             'error': error
         }), 500
 
+
+@product_bp.route('/inventory/update', methods = ['PUT'])
+def product_update_inventory () :
+    try :
+        user = auth_user(request)
+
+        # restrict access to only admin users
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        elif user.role != Role.ADMIN :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+
+        data = request.get_json()
+
+        try :
+            # start a nested transaction
+            with db.session.begin_nested() :
+                # loop over data, and extract the product id key and stock value
+                for product_id, new_stock in data.items() :
+                    # convert id to int, and retrieve product
+                    product = Product.query.get(int(product_id))
+                    if product :
+                        # convert value to int, and set new stock
+                        product.stock = int(new_stock)
+                    else :
+                        raise ValueError(f'Product with id {product_id} was not found')
+
+            # commit nested transaction
+            db.session.commit()
+
+        except Exception as error :
+            db.session.rollback()  # rollback transaction if error
+            raise 
+
+        return jsonify({
+            'message': 'Inventory updated successfully'
+        }), 200
+    
+    except Exception as error :
+        current_app.logger.error(f'Error updating inventory: {str(error)}')
+        return jsonify({
+            'error': f'Error updating inventory: {str(error)}'
+        }), 500
 
 @product_bp.route('/<int:id>', methods = ['GET'])
 def product_show (id) :

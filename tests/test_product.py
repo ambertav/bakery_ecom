@@ -194,6 +194,43 @@ def test_product_update (flask_app, create_admin_user, create_client_user, role,
         assert response.status_code == 403
         assert response.json['error'] == 'Forbidden'
 
+
+@pytest.mark.parametrize('valid_product_ids', [True, False])
+def test_product_update_inventory (flask_app, create_admin_user, valid_product_ids) :
+    user, test_uid = create_admin_user
+
+    if valid_product_ids :
+        # query for valid product ids
+        product_ids = db.session.query(Product.id).limit(2)
+
+        # dict comprehension to form structure of {'product.id': 'new stock value'}
+        # query returns ids as tuple, and will have to convert to strings
+        new_stock_value = str(random.randint(0, 100))
+        input = { str(id[0]): new_stock_value for id in product_ids }
+
+    else :
+        input = {
+            '0': '100',
+            '0': '108',
+        }
+
+    # req to edit product
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put('/api/product/inventory/update', 
+            headers = { 'Authorization': f'Bearer {test_uid}' }, 
+            json = input
+        )
+
+    if valid_product_ids :
+        assert response.status_code == 200
+        assert response.json['message'] == 'Inventory updated successfully'
+
+        # retrieve one of the product ids to assert new stock value
+        updated_product = Product.query.get(product_ids[0][0])
+        assert updated_product.stock == int(new_stock_value)
+
+    else :
+        assert response.status_code == 500
     
 
 # ---- helpers ----
