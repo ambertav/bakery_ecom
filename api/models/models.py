@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey, CheckConstraint, and_, or_
 from sqlalchemy.orm import validates
 from enum import Enum
+from decimal import Decimal, ROUND_DOWN
 
 from ...database import db
 
@@ -193,14 +194,15 @@ class Cart_Item (db.Model) :
 
     # calculating price of item based on quantity and portion
     def calculate_price (self) :
-        if self.portion == Portion.WHOLE :
-            portion_multipler = 1
-        elif self.portion == Portion.MINI :
-            portion_multipler = 0.5
-        elif self.portion == Portion.SLICE :
-            portion_multipler = 0.15
-        
-        self.price = round((self.product.price * self.quantity * portion_multipler), 2)
+        if self.portion == Portion.WHOLE:
+            portion_multiplier = Decimal('1')
+        elif self.portion == Portion.MINI:
+            portion_multiplier = Decimal('0.5')
+        elif self.portion == Portion.SLICE:
+            portion_multiplier = Decimal('0.15')
+
+        total_price = (self.product.price * Decimal(str(self.quantity)) * portion_multiplier)
+        self.price = Decimal(total_price).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
 
     def as_dict (self) :
         return {

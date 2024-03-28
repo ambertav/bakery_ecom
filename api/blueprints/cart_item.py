@@ -153,23 +153,17 @@ def create_item (data, user) :
                 'success': False,
                 'message': 'Product not found'
             }
-        
-        # search users existing cart for an item with matching product id
-        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, ordered = False).first()
+
+        # search users existing cart for an unordered item with matching product_id and portion size
+        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], ordered = False).first()
 
         if existing_item :
-            existing_item.quantity += data.get('qty') # update quantity instead of creating new cart item
+            # update quantity of existing item instead of creating new cart item
+            existing_item.quantity += data.get('qty') 
             success = True
         else :
-            portion_mapping = {
-                'SLICE': Portion.SLICE,
-                'WHOLE': Portion.WHOLE,
-                'MINI': Portion.MINI
-            }
-
-            portion_selection = portion_mapping.get(data.get('portion'))
-
-            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion = portion_selection, quantity = data.get('qty'), ordered = False, order_id = None)
+            # otherwise, create item with product id and inputted quantity and portion
+            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], quantity = data.get('qty'), ordered = False, order_id = None)
             db.session.add(new_item)
             success = True
 
