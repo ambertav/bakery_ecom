@@ -1,13 +1,16 @@
 from flask import Blueprint, jsonify, request, current_app
 import stripe
+import os
 import json
 import datetime
 
-from ...database import db
-from ...config import config
-from ..utils.auth import auth_user
-from ..models.models import User, Address, Cart_Item, Order, Order_Status, Pay_Status, Deliver_Method
+from decimal import Decimal
 
+from ...database import db
+from ..utils.auth import auth_user
+from ..models.models import User, Role, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method
+
+webhook_secret = os.getenv('WEBHOOK_SECRET')
 
 order_bp = Blueprint('order', __name__)
 
@@ -17,27 +20,36 @@ def order_history_index () :
         # retrieve token and auth user
         user = auth_user(request)
 
-        if user is None:
+        if user is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
+                
+        page = request.args.get('page', 1, type = int)
         
         # check if recent query parameter is included and set to true
         is_recent = request.args.get('recent', '').lower() == 'true'
 
+        base_query =  Order.query.filter_by(user_id = user.id).order_by(Order.date.desc())
+        
         if is_recent :
             # filter by user, sort by date, only take most recent 3
-            orders = Order.query.filter_by(user_id = user.id).order_by(Order.date.desc()).limit(3).all() 
-        else :
-            # filter by user, sort by date, take all
-            orders = Order.query.filter_by(user_id = user.id).order_by(Order.date.desc()).all() 
+            orders = base_query.limit(3).all()
+            order_history = [ order.as_dict() for order in orders ]
 
-
-        order_history = [ order.as_dict() for order in orders ]
+            return jsonify({
+                'orders': order_history,
+            }), 200
         
-        return jsonify({
-            'orders': order_history
-        }), 200
+        else :
+            orders = base_query.paginate(page = page, per_page = 10)
+            order_history = [ order.as_dict() for order in orders.items ]
+            
+            return jsonify({
+                'orders': order_history,
+                'totalPages': orders.pages,
+                'currentPage': page
+            }), 200
 
 
     except Exception as error :
@@ -61,7 +73,7 @@ def show_order (id) :
 
         if order :
             order_detail = order.as_dict()
-            cart_items = order.items
+            cart_items = order.cart_items
             cart_item_details = [item.as_dict() for item in cart_items]
             order_detail['items'] = cart_item_details
 
@@ -78,13 +90,14 @@ def show_order (id) :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+    
 
 @order_bp.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session() :
     # retrieve token and auth user
     user = auth_user(request)
 
-    if user is None:
+    if user is None :
         return jsonify({
             'error': 'Authentication failed'
         }), 401
@@ -110,6 +123,7 @@ def create_checkout_session() :
                 'currency': 'usd',
                 'product_data': {
                     'name': item['name'],
+                    'description': item['portion'],
                 },
                 'unit_amount': int(float(item['price']) * 100), # convert price to cents
             },
@@ -145,6 +159,7 @@ def create_checkout_session() :
     
 @order_bp.route('/stripe-webhook', methods = ['POST'])    
 def handle_stripe_webhook () :
+
     event = None
     payload = request.data
 
@@ -155,12 +170,12 @@ def handle_stripe_webhook () :
         return jsonify(
             success = False
         )
-    
-    if config['WEBHOOK_SECRET'] :
+
+    if webhook_secret :
         sig_header = request.headers.get('Stripe-Signature')
         try :
             event = stripe.Webhook.construct_event(
-                payload, sig_header, config['WEBHOOK_SECRET']
+                payload, sig_header, webhook_secret
             )
 
         except stripe.error.SignatureVerificationError as error:
@@ -210,17 +225,7 @@ def create_order (address, user, method) :
     try :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
-        total = sum(item.price for item in items_to_associate)
-
-        # map out method string value to ship method enum value
-        method_mapping = {
-            'STANDARD': Deliver_Method.STANDARD,
-            'EXPRESS': Deliver_Method.EXPRESS,
-            'NEXT_DAY': Deliver_Method.NEXT_DAY,
-            'PICK_UP': Deliver_Method.PICK_UP
-        }
-
-        order_ship_method = method_mapping.get(method)
+        total = sum(item.price * item.quantity for item in items_to_associate)
 
         # create instance of order and associate with user
         new_order = Order(
@@ -229,7 +234,7 @@ def create_order (address, user, method) :
             total_price = total,
             status = 'PENDING',
             stripe_payment_id = None,
-            delivery_method = order_ship_method,
+            delivery_method = Deliver_Method[method.upper()],
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address,
         )
@@ -245,6 +250,15 @@ def create_order (address, user, method) :
         for item in items_to_associate :
             item.ordered = True
             item.order_id = new_order.id
+
+            if item.portion == Portion.SLICE :
+                # if portion is slice, deduct by 1/8, or 0.125, * quantity of slices
+                item.product.stock -= Decimal(0.125) * Decimal(item.quantity)
+            elif item.portion == Portion.MINI :
+                # if portion is mini, deduct by 1/2, or 0.5, * quantity of minis
+                item.product.stock -= Decimal(0.5) * Decimal(item.quantity)
+            else :
+                item.product.stock -= Decimal(item.quantity)
 
         db.session.commit()
         
