@@ -30,7 +30,7 @@ class Product (db.Model) :
     category = db.Column(db.Enum(Category), nullable = False)
     image = db.Column(db.String(), nullable = False, default = 'https://example.com/default_image.jpg')
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
-    stock = db.Column(db.Integer(), nullable = False)
+    stock = db.Column(db.Numeric(precision = 5, scale = 3), nullable = False)
 
     __table_args__ = (
         CheckConstraint('stock >= 0', name = 'non_negative_stock'),
@@ -201,8 +201,14 @@ class Cart_Item (db.Model) :
         elif self.portion == Portion.SLICE:
             portion_multiplier = Decimal('0.15')
 
-        total_price = (self.product.price * Decimal(str(self.quantity)) * portion_multiplier)
-        self.price = Decimal(total_price).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
+        # price per item
+            # multiple product price by multiplier and round down
+                # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
+        total_price = Decimal(self.product.price * portion_multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
+
+            # replace the last digit with 9 to normalize prices to x.x9 format
+                # particularly for slice options
+        self.price = total_price - (total_price % Decimal('0.10')) + Decimal('0.09')
 
     def as_dict (self) :
         return {
@@ -221,6 +227,7 @@ class Cart_Item (db.Model) :
 class Order_Status (Enum) :
     PENDING = 'PENDING'
     PROCESSING = 'PROCESSING'
+    COMPLETED = 'COMPLETED'
     DELIVERED = 'DELIVERED'
     CANCELLED = 'CANCELLED'
 
