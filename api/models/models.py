@@ -226,7 +226,7 @@ class Cart_Item (db.Model) :
 # enums for order model
 class Order_Status (Enum) :
     PENDING = 'PENDING'
-    PROCESSING = 'PROCESSING'
+    IN_PROGRESS = 'IN_PROGRESS'
     COMPLETED = 'COMPLETED'
     DELIVERED = 'DELIVERED'
     CANCELLED = 'CANCELLED'

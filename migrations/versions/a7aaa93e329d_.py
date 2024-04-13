@@ -59,7 +59,7 @@ def upgrade():
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('total_price', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('date', sa.TIMESTAMP(), nullable=False),
-    sa.Column('status', sa.Enum('PENDING', 'PROCESSING', 'DELIVERED', 'CANCELLED', name='order_status'), nullable=False),
+    sa.Column('status', sa.Enum('PENDING', 'IN_PROGRESS', 'COMPLETED', 'DELIVERED', 'CANCELLED', name='order_status'), nullable=False),
     sa.Column('stripe_payment_id', sa.String(), nullable=True),
     sa.Column('delivery_method', sa.Enum('STANDARD', 'EXPRESS', 'NEXT_DAY', 'PICK_UP', name='deliver_method'), nullable=False),
     sa.Column('payment_status', sa.Enum('PENDING', 'COMPLETED', 'FAILED', name='pay_status'), nullable=False),
