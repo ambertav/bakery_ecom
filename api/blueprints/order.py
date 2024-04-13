@@ -90,7 +90,70 @@ def show_order (id) :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+
+@order_bp.route('/fulfillment/pending/', methods = ['GET'])
+def order_fulfillment_get_pending () :
+    # user auth done in get_fulfillment_orders_by_status function
+    page = request.args.get('page', 1, type = int)
+    return get_fulfillment_orders_by_status('PENDING', page)
     
+
+@order_bp.route('/fulfillment/in-progress/', methods = ['GET'])
+def order_fulfillment_get_in_progress () :
+    # user auth done in get_fulfillment_orders_by_status function
+    page = request.args.get('page', 1, type = int)
+    return get_fulfillment_orders_by_status('IN_PROGRESS', page)
+
+
+def get_fulfillment_orders_by_status (status, page) :
+    try :
+        user = auth_user(request)
+
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        elif user.role != Role.ADMIN :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
+
+        # retrieves orders based on status and page passed into function
+        orders = (
+            Order.query
+                .filter_by(status = Order_Status[status])
+                .order_by(Order.date.asc())
+                .paginate(page = page, per_page = 10)
+        )
+
+        if orders.items :
+            # formats orders and corresponding cart_items
+            order_history = [
+                { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
+                for order in orders.items
+            ]
+
+            return jsonify({
+                'orders': order_history,
+                'totalPages': orders.pages,
+                'currentPage': page
+            }), 200
+        
+        else :
+            return jsonify({
+                'orders': [],
+                'message': 'No orders found'
+            }), 200
+
+
+    except Exception as error :
+        current_app.logger.error(f'Error retrieving order fulfillment: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
 
 @order_bp.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session() :
@@ -203,7 +266,6 @@ def handle_stripe_webhook () :
             try :
                 # finalize order with payment info from stripe
                 new_order.stripe_payment_id = session['payment_intent']
-                new_order.status =  Order_Status.PROCESSING
                 new_order.payment_status =  Pay_Status.COMPLETED
 
                 db.session.commit()
@@ -232,7 +294,7 @@ def create_order (address, user, method) :
             user_id = user,
             date = datetime.datetime.now(),
             total_price = total,
-            status = 'PENDING',
+            status = Order_Status.PENDING,
             stripe_payment_id = None,
             delivery_method = Deliver_Method[method.upper()],
             payment_status = Pay_Status.PENDING,
@@ -310,11 +372,6 @@ def handle_address (address, user) :
         return jsonify({
             'error': 'Internal server error'
         }), 500
-
-
-
-
-
 
 
 
