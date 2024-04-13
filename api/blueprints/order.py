@@ -97,7 +97,8 @@ def order_fulfillment_get_pending () :
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
-    return get_fulfillment_orders_by_status('PENDING', page, delivery_method)
+    search = request.args.get('search')
+    return get_fulfillment_orders_by_status('PENDING', page, delivery_method, search)
     
 
 @order_bp.route('/fulfillment/in-progress/', methods = ['GET'])
@@ -105,13 +106,14 @@ def order_fulfillment_get_in_progress () :
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
-    return get_fulfillment_orders_by_status('IN_PROGRESS', page, delivery_method)
+    search = request.args.get('search')
+    return get_fulfillment_orders_by_status('IN_PROGRESS', page, delivery_method, search)
 
 
-def get_fulfillment_orders_by_status (status, page, delivery_method) :
+def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
     try :
+        # authentication and authorization check
         user = auth_user(request)
-
         if user is None :
             return jsonify({
                 'error': 'Authentication failed'
@@ -122,41 +124,65 @@ def get_fulfillment_orders_by_status (status, page, delivery_method) :
             }), 403
         
 
-        # retrieve orders based on status and page passed into function
+        # if there is a search param, search by the specific id and return
+        if search :
+            # retrieve order
+            order = Order.query.filter_by(id = search).first()
+            if order :
+                # format order and corresponding cart_items
+                order_data = [
+                    { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
+                ]
 
-        # initialize base query
-        base_query = Order.query.filter_by(status = Order_Status[status])
+                return jsonify({
+                    'orders': order_data, 
+                    'totalPages': 1, 
+                    'currentPage': 1
+                }), 200
+            
+            else:
+                return jsonify({
+                    'orders': [], 
+                    'message': 'Order not found'
+                }), 200
 
-        if delivery_method :
-            # add delivery method filter if present
-            base_query = base_query.filter_by(delivery_method = Deliver_Method[delivery_method.upper()])
 
-
-        # makes query, orders by date, paginates
-        orders = (
-            base_query
-                .order_by(Order.date.asc())
-                .paginate(page = page, per_page = 10)
-        )
-
-        if orders.items :
-            # formats orders and corresponding cart_items
-            order_history = [
-                { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
-                for order in orders.items
-            ]
-
-            return jsonify({
-                'orders': order_history,
-                'totalPages': orders.pages,
-                'currentPage': page
-            }), 200
-        
         else :
-            return jsonify({
-                'orders': [],
-                'message': 'No orders found'
-            }), 200
+            # retrieve orders based on status and page passed into function
+
+            # initialize base query
+            base_query = Order.query.filter_by(status = Order_Status[status])
+
+            if delivery_method :
+                # add delivery method filter if present
+                base_query = base_query.filter_by(delivery_method = Deliver_Method[delivery_method.upper()])
+
+
+            # makes query, orders by date, paginates
+            orders = (
+                base_query
+                    .order_by(Order.date.asc())
+                    .paginate(page = page, per_page = 10)
+            )
+
+            if orders.items :
+                # formats orders and corresponding cart_items
+                order_history = [
+                    { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
+                    for order in orders.items
+                ]
+
+                return jsonify({
+                    'orders': order_history,
+                    'totalPages': orders.pages,
+                    'currentPage': page
+                }), 200
+            
+            else :
+                return jsonify({
+                    'orders': [],
+                    'message': 'No orders found'
+                }), 200
 
 
     except Exception as error :
