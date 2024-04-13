@@ -96,17 +96,19 @@ def show_order (id) :
 def order_fulfillment_get_pending () :
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
-    return get_fulfillment_orders_by_status('PENDING', page)
+    delivery_method = request.args.get('delivery-method')
+    return get_fulfillment_orders_by_status('PENDING', page, delivery_method)
     
 
 @order_bp.route('/fulfillment/in-progress/', methods = ['GET'])
 def order_fulfillment_get_in_progress () :
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
-    return get_fulfillment_orders_by_status('IN_PROGRESS', page)
+    delivery_method = request.args.get('delivery-method')
+    return get_fulfillment_orders_by_status('IN_PROGRESS', page, delivery_method)
 
 
-def get_fulfillment_orders_by_status (status, page) :
+def get_fulfillment_orders_by_status (status, page, delivery_method) :
     try :
         user = auth_user(request)
 
@@ -120,10 +122,19 @@ def get_fulfillment_orders_by_status (status, page) :
             }), 403
         
 
-        # retrieves orders based on status and page passed into function
+        # retrieve orders based on status and page passed into function
+
+        # initialize base query
+        base_query = Order.query.filter_by(status = Order_Status[status])
+
+        if delivery_method :
+            # add delivery method filter if present
+            base_query = base_query.filter_by(delivery_method = Deliver_Method[delivery_method.upper()])
+
+
+        # makes query, orders by date, paginates
         orders = (
-            Order.query
-                .filter_by(status = Order_Status[status])
+            base_query
                 .order_by(Order.date.asc())
                 .paginate(page = page, per_page = 10)
         )
