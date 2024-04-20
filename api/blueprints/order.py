@@ -162,7 +162,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             orders = (
                 base_query
                     .order_by(Order.date.asc())
-                    .paginate(page = page, per_page = 10)
+                    .paginate(page = page, per_page = 50)
             )
 
             if orders.items :

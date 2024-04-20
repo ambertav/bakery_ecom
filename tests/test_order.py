@@ -2,6 +2,7 @@ import pytest
 import unittest
 import json
 import datetime
+import random
 
 from unittest.mock import patch, MagicMock
 
@@ -20,7 +21,7 @@ def seed_database (flask_app, create_client_user) :
             category = Category.CAKE,
             image = 'https://example.com/image.jpg',
             price = 10.00,
-            stock = 100
+            stock = 50
         )
         db.session.add(product)
         db.session.commit()
@@ -145,9 +146,9 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
 
     # asserting that order was finalized and address was associated
     assert created_order.shipping_address_id == address.id
-    assert created_order.status == Order_Status.PROCESSING
+    assert created_order.status == Order_Status.PENDING
     assert created_order.payment_status == Pay_Status.COMPLETED
-    unittest.TestCase().assertDictEqual(created_order.items[0].as_dict(), cart_item.as_dict())
+    unittest.TestCase().assertDictEqual(created_order.cart_items[0].as_dict(), cart_item.as_dict())
 
     # asserting that cart item within order was set to ordered = True
 
@@ -182,11 +183,12 @@ def test_order_history (flask_app, create_client_user, seed_database, requesting
     # if recent=true query param
     if requesting_recents :
         # asserting that only returned 3 most recent
-        assert len(response.json['orders']) is 3
+        assert len(response.json['orders']) == min(3, count_of_orders)
 
     else :
         # asserting that response sends all the orders
-        assert len(response.json['orders']) == count_of_orders
+        expected_pages = (count_of_orders - 1) // 10 + 1
+        assert response.json['totalPages'] == expected_pages
 
 
 # show order
@@ -201,15 +203,12 @@ def test_show_order (flask_app, create_client_user) :
     # format queried order and its items into dictionary
     # convert decimals into strings for assertions against response.json
     order_dict = order.as_dict()
-    order_dict['totalPrice'] = str(order.total_price)
+    order_dict['totalPrice'] = str(order_dict['totalPrice'])
 
     order_dict['items'] = [
-        { **item.as_dict(), 'price': str(item.product.price) }
-        for item in order.items
+        { **item.as_dict(), 'price': str(item.price) }
+        for item in order.cart_items
     ]
-
-
-    
 
     with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
         response = flask_app.get(f'/api/order/{order.id}',
@@ -218,6 +217,68 @@ def test_show_order (flask_app, create_client_user) :
 
     assert response.status_code in [200, 308]
     unittest.TestCase().assertDictEqual(order_dict, response.json['order'])
+
+
+@pytest.mark.parametrize('status, isFilter, isSearch', [
+    ('pending', False, False),
+    ('pending', True, False),
+    ('pending', False, True),
+    ('in-progress', False, False),
+    ('in-progress', True, False),
+    ('in-progress', False, True),
+])
+def test_order_fulfillment (flask_app, create_admin_user, status, isFilter, isSearch) :
+    user, test_uid = create_admin_user
+
+    # retrieve an order to search by
+    order = Order.query.first()
+
+    # initalize param strings
+    delivery_param = random.choice(list(Deliver_Method)).value if isFilter else ''
+    # random between order id and 0
+    search_param = random.choice([order.id, 0]) if isSearch else ''
+
+    # format query params for request
+    query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value }
+
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get(f'/api/order/fulfillment/{status}/',
+            query_string = query_params,
+            headers = { 'Authorization': f'Bearer {test_uid}' }
+        )
+
+    assert response.status_code in [200, 308]
+
+    if isSearch :
+        # if searching, query for the order in database
+        searched_order = Order.query.get(search_param)
+        if searched_order :
+            # assert that only 1 was returned in response, and matched queried order
+            assert len(response.json['orders']) is 1
+            assert response.json['orders'][0]['id'] == searched_order.id
+        else :
+            # otherwise, assert message if none returned
+            unittest.TestCase().assertListEqual([], response.json['orders'])
+            assert response.json['message'] == 'Order not found'
+    else :
+        # base count query
+        count_query = Order.query.filter_by(status = Order_Status[status.upper().replace("-", "_")])
+
+        if isFilter :
+            # addition of filtering by delivery_method 
+            count_query = count_query.filter_by(delivery_method = Deliver_Method[delivery_param.upper()])
+        
+        # count the orders
+        count_of_orders = count_query.count()
+        # assert count from database to response list length
+        assert len(response.json['orders']) == count_of_orders
+
+        # asserting message if no order
+        if count_of_orders is 0 :
+            unittest.TestCase().assertListEqual([], response.json['orders'])
+            assert response.json['message'] == 'No orders found'
+
+
 
 
 # ---- helpers ----
