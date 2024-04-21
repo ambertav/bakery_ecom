@@ -281,3 +281,27 @@ class Order (db.Model) :
             'paymentStatus': serialize_enum(self.payment_status),
             'address': self.address.as_dict(),
         }
+
+class Task (db.Model) :
+    __tablename__ = 'tasks'
+
+    id = db.Column(db.Integer, primary_key = True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False) 
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable = False)
+    created_at = db.Column(db.TIMESTAMP(), nullable = False)
+    completed_at = db.Column(db.TIMESTAMP(), nullable = True)
+
+    def __init__ (self, admin_id, order_id, created_at, completed_at) :
+        self.admin_id = admin_id
+        self.order_id = order_id
+        self.created_at = created_at
+        self.completed_at = completed_at
+
+    def as_dict (self) :
+        return {
+            'id': self.id,
+            'adminId': self.admin_id,
+            'orderId': self.order_id,
+            'createdAt': self.created_at.strftime('%m/%d/%Y %I:%M %p'),
+            'completedAt': self.completed_at.strftime('%m/%d/%Y %I:%M %p'),
+        }
