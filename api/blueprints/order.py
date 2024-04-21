@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from ...database import db
 from ..utils.auth import auth_user
-from ..models.models import User, Role, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method
+from ..models.models import User, Role, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method, Task
 
 webhook_secret = os.getenv('WEBHOOK_SECRET')
 
@@ -191,8 +191,70 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             'error': 'Internal server error'
         }), 500
 
+@order_bp.route('/fulfillment/set-in-progress/', methods = ['PUT'])
+def start_orders_and_create_admin_tasks () :
+    try :
+        # authentication and authorization check
+        user = auth_user(request)
+        if user is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        elif user.role != Role.ADMIN :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
+        data = request.get_json()
 
-@order_bp.route('/create-checkout-session', methods=['POST'])
+        try :
+            # start a nested transaction
+            with db.session.begin_nested() :
+                # extract the order ids
+                for order_id in data :
+                    # convert id to int, retrieve orders
+                    order = Order.query.get(int(order_id))
+                    if order :
+                        # set order status to in progress
+                        order.status = Order_Status.IN_PROGRESS
+                        # create a new task, associating order and admin user
+                        task = Task(
+                            admin_id = user.id,
+                            order_id = order_id,
+                            created_at = datetime.datetime.now(),
+                            completed_at = None
+                        )
+                        db.session.add(task)
+                    else :
+                        raise ValueError(f'Order with id {order_id} was not found')
+
+            # commit nested transaction
+            db.session.commit()
+
+        except Exception as error :
+            # rollback entire transaction if error
+            db.session.rollback()
+            raise 
+
+        return jsonify({
+            'message': 'Successfully started orders and created tasks'
+        }), 200
+
+    except Exception as error :
+        current_app.logger.error(f'Error starting orders: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
+@order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
+def return_order_to_pending (id) :
+    pass
+
+@order_bp.route('/fulfillment/<int:id>/set-complete/', methods = ['PUT'])
+def complete_order_fulfillment (id) :
+    pass
+
+@order_bp.route('/create-checkout-session', methods = ['POST'])
 def create_checkout_session() :
     # retrieve token and auth user
     user = auth_user(request)
