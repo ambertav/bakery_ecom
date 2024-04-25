@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import text
 
 from ...database import db
-from ..utils.auth import auth_user
-from ..models.models import Product, Category, Role
+from ..utils.auth import auth_user, auth_admin
+from ..models.models import Product, Category
 
 from ..utils.aws_s3 import s3_photo_upload
 
@@ -51,9 +51,9 @@ def product_index () :
         if products.items :
             
             # determining if the user is an admin
-            user = auth_user(request)
+            admin = auth_admin(request)
 
-            if user and user.role == Role.ADMIN :
+            if admin :
                 # if admin send all products, format using as_dict()
                 products_list = [ product.as_dict() for product in products.items ]
             else :
@@ -84,16 +84,12 @@ def product_index () :
 def create_product () :
     try :
         # retrieve token and auth user
-        user = auth_user(request)
+        admin = auth_admin(request)
 
-        if user is None :
+        if admin is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        elif user.role != Role.ADMIN :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
         
         data = request.get_json()
 
@@ -123,16 +119,12 @@ def create_product () :
 def product_update (id) :
     try :
         # retrieve token and auth user
-        user = auth_user(request)
+        admin = auth_admin(request)
 
-        if user is None :
+        if admin is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        elif user.role != Role.ADMIN :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
         
 
         product = Product.query.get(id)
@@ -199,17 +191,13 @@ def product_upload_photo (id) :
 @product_bp.route('/inventory/update', methods = ['PUT'])
 def product_update_inventory () :
     try :
-        user = auth_user(request)
+        admin = auth_admin(request)
 
         # restrict access to only admin users
-        if user is None :
+        if admin is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        elif user.role != Role.ADMIN :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
 
         data = request.get_json()
 

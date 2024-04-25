@@ -7,8 +7,8 @@ import datetime
 from decimal import Decimal
 
 from ...database import db
-from ..utils.auth import auth_user
-from ..models.models import User, Role, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method, Task
+from ..utils.auth import auth_user, auth_admin
+from ..models.models import User, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method, Task
 
 webhook_secret = os.getenv('WEBHOOK_SECRET')
 
@@ -113,16 +113,12 @@ def order_fulfillment_get_in_progress () :
 def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
     try :
         # authentication and authorization check
-        user = auth_user(request)
-        if user is None :
+        admin = auth_admin(request)
+        if admin is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        elif user.role != Role.ADMIN :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
-        
+
 
         # if there is a search param, search by the specific id and return
         if search :
@@ -195,15 +191,11 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
 def start_orders_and_create_admin_tasks () :
     try :
         # authentication and authorization check
-        user = auth_user(request)
-        if user is None :
+        admin = auth_admin(request)
+        if admin is None :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        elif user.role != Role.ADMIN :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
         
         data = request.get_json()
 
@@ -219,7 +211,7 @@ def start_orders_and_create_admin_tasks () :
                         order.status = Order_Status.IN_PROGRESS
                         # create a new task, associating order and admin user
                         task = Task(
-                            admin_id = user.id,
+                            admin_id = admin.id,
                             order_id = order_id,
                             created_at = datetime.datetime.now(),
                             completed_at = None
@@ -241,14 +233,47 @@ def start_orders_and_create_admin_tasks () :
         }), 200
 
     except Exception as error :
-        current_app.logger.error(f'Error starting orders: {str(error)}')
+        current_app.logger.error(f'Error batch starting orders: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
 def return_order_to_pending (id) :
-    pass
+    try :
+        # authentication and authorization check
+        admin = auth_admin(request)
+        if admin is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        # verify that user owns task
+        task = Task.query.filter_by(order_id = id, admin_id = admin)
+        if not task :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
+        # return order to pending
+        order = Order.query.get(id)
+        order.status = Order_Status.PENDING
+
+        # delete task
+        task.delete()
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Order was successfully returned to pending and task was unassigned'
+        }), 200
+
+
+    except Exception as error :
+        current_app.logger.error(f'Error returning order to pending status: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-complete/', methods = ['PUT'])
 def complete_order_fulfillment (id) :
