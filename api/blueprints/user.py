@@ -4,8 +4,8 @@ import datetime
 
 
 from ...database import db
-from ..utils.auth import auth_user
-from ..models.models import User, Role
+from ..utils.auth import auth_user, auth_admin
+from ..models.models import User
 
 from .cart_item import create_item
 
@@ -29,10 +29,7 @@ def signup () :
             'name': request.json.get('name'),
             'firebase_uid': uid,
             'stripe_customer_id': None,
-            'billing_address': None,
-            'shipping_address': None,
-            'role': Role.CLIENT,
-            'created_at': datetime.datetime.utcnow()
+            'created_at': datetime.utcnow()
         }
 
         new_user = User(**user_data)
@@ -90,17 +87,24 @@ def login () :
 @user_bp.route('/info', methods = ['GET'])
 def get_user_info () :
     try :
+        # authenticate for both user and admin
         user = auth_user(request)
+        admin = auth_admin(request)
 
-        if not user :
+        # if neither user nor admin, return 404
+        if not user and not admin :
             return jsonify({
                 'message': 'User not found'
             }), 404
-        
-        # return user's name and admin status
+
+        # determining user's/admin's name and admin status
+        name = admin.name if admin else user.name
+        is_admin = bool(admin)
+
+        # return info
         return jsonify({
-            'name': user.name,
-            'isAdmin': True if user.role == Role.ADMIN else False
+            'name': name, 
+            'isAdmin': is_admin
         }), 200
     
     except Exception as error :
