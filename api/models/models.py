@@ -2,6 +2,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey, CheckConstraint, and_, or_
 from sqlalchemy.orm import validates
 from enum import Enum
+import random
+import datetime
 from decimal import Decimal, ROUND_DOWN
 
 from ...database import db
@@ -58,11 +60,6 @@ class Product (db.Model) :
         }
 
 
-# enum for user role
-class Role (Enum) :
-    CLIENT = 'CLIENT'
-    ADMIN = 'ADMIN'
-
 # User
 class User (db.Model) :
     __tablename__ = 'users'
@@ -71,19 +68,61 @@ class User (db.Model) :
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
     stripe_customer_id = db.Column(db.String(), nullable = True)
-    role = db.Column(db.Enum(Role), nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
     addresses = db.relationship('Address', backref = 'user', lazy = 'dynamic')
 
-    def __init__ (self, name, firebase_uid, stripe_customer_id, billing_address, shipping_address, role, created_at) :
+    def __init__ (self, name, firebase_uid, stripe_customer_id, created_at) :
         self.name = name
         self.firebase_uid = firebase_uid
         self.stripe_customer_id = stripe_customer_id
-        self.billing_address = billing_address
-        self.shipping_address = shipping_address
-        self.role = role
         self.created_at = created_at
+
+
+# Admin
+class Admin (db.Model) :
+    __tablename__ = 'admins'
+
+    id = db.Column(db.Integer, primary_key = True)
+    employee_id = db.Column(db.Integer, unique = True, nullable = False)
+    pin = db.Column(db.Integer, nullable = False)
+    pin_expiration = db.Column(db.TIMESTAMP(), nullable = False)
+    name = db.Column(db.String(30), nullable = False)
+    firebase_uid = db.Column(db.String(128), nullable = False)
+    created_at = db.Column(db.TIMESTAMP(), nullable = False)
+
+    tasks = db.relationship('Task', backref = 'admin', lazy = 'dynamic')
+
+    def __init__ (self, pin, name, firebase_uid, created_at) :
+        self.pin = pin
+        self.name = name
+        self.firebase_uid = firebase_uid
+        self.created_at = created_at
+
+        # generate unique employee id
+        self.employee_id = self.generate_unique_employee_id()
+
+        # setting initial pin expiration to 30 days after creation
+        self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
+
+    def generate_unique_employee_id () :
+        # generating random 8 digit number
+        employee_id = random.randint(10000000, 99999999)
+        
+        # checking if employee_id already exists in database
+        while Admin.query.filter_by(employee_id = employee_id).first() :
+            employee_id = random.randint(10000000, 99999999)
+        
+        return employee_id
+    
+    def is_pin_expired (self) :
+        # checking pin expiration
+        return datetime.utcnow() > self.pin_expiration
+
+    def renew_pin (self, new_pin) :
+        # renew pin and update pin expiration date (30 days from current time)
+        self.pin = new_pin
+        self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
 
 
 # Address
@@ -153,7 +192,7 @@ class Cart_Item (db.Model) :
                 and_(ordered == True, order_id != None),
                 and_(ordered == False, order_id == None)
             ),
-            name='cart_item_order_association_check'
+            name = 'cart_item_order_association_check'
         ),
     )
 
@@ -186,7 +225,7 @@ class Cart_Item (db.Model) :
         self.ordered = ordered
         self.order_id = order_id
 
-        self.product = Product.query.filter_by(id=product_id).first()
+        self.product = Product.query.filter_by(id = product_id).first()
         if self.product is None :
             raise ValueError(f'Product does not exist')
         
@@ -261,6 +300,9 @@ class Order (db.Model) :
     cart_items = db.relationship('Cart_Item', backref = 'orders')
     address = db.relationship('Address', backref = 'orders', foreign_keys = [shipping_address_id])
 
+    # one to one relationship, cascade deletion
+    task = db.relationship('Task', backref = 'order', uselist = False, cascade = 'all, delete-orphan')
+
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, delivery_method, payment_status, shipping_address_id) :
         self.user_id = user_id
         self.date = date
@@ -288,20 +330,24 @@ class Task (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False) 
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable = False)
-    created_at = db.Column(db.TIMESTAMP(), nullable = False)
+    assigned_at = db.Column(db.TIMESTAMP(), nullable = False)
     completed_at = db.Column(db.TIMESTAMP(), nullable = True)
 
-    def __init__ (self, admin_id, order_id, created_at, completed_at) :
+    def __init__ (self, admin_id, order_id, assigned_at, completed_at) :
         self.admin_id = admin_id
         self.order_id = order_id
-        self.created_at = created_at
+        self.assigned_at = assigned_at
         self.completed_at = completed_at
 
+
     def as_dict (self) :
+        admin = Admin.query.get(self.admin_id)
+        admin_name = admin.name if admin else None
+    
         return {
             'id': self.id,
-            'adminId': self.admin_id,
+            'adminName': admin_name,
             'orderId': self.order_id,
-            'createdAt': self.created_at.strftime('%m/%d/%Y %I:%M %p'),
+            'assignedAt': self.assigned_at.strftime('%m/%d/%Y %I:%M %p'),
             'completedAt': self.completed_at.strftime('%m/%d/%Y %I:%M %p'),
         }
