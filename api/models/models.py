@@ -328,7 +328,7 @@ class Task (db.Model) :
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key = True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable = False) 
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable = False) 
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable = False)
     assigned_at = db.Column(db.TIMESTAMP(), nullable = False)
     completed_at = db.Column(db.TIMESTAMP(), nullable = True)
@@ -338,7 +338,6 @@ class Task (db.Model) :
         self.order_id = order_id
         self.assigned_at = assigned_at
         self.completed_at = completed_at
-
 
     def as_dict (self) :
         admin = Admin.query.get(self.admin_id)
