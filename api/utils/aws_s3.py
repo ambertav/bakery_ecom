@@ -14,15 +14,21 @@ s3 = boto3.client(
 )
 
 allowed_file_extensions = ['png', 'jpg', 'jpeg', 'gif']
+max_file_size_bytes = 10 * 1024 * 1024
 
 
 def compress_and_resize_image (file) :
     try :
         image = Image.open(io.BytesIO(file))
+
+        # for png file uploads
+        if image.mode == 'RGBA' :
+            image = image.convert('RGB')
         resized_image = image.resize((250, 250))
 
         output = io.BytesIO()
         resized_image.save(output, format ='JPEG')
+
         output.seek(0)
 
         return output
