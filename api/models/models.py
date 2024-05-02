@@ -104,9 +104,9 @@ class Admin (db.Model) :
         self.employee_id = self.generate_unique_employee_id()
 
         # setting initial pin expiration to 30 days after creation
-        self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
+        self.pin_expiration = datetime.datetime.utcnow() + datetime.timedelta(days = 30)
 
-    def generate_unique_employee_id () :
+    def generate_unique_employee_id (self) :
         # generating random 8 digit number
         employee_id = random.randint(10000000, 99999999)
         
