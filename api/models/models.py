@@ -5,6 +5,7 @@ from enum import Enum
 import random
 import datetime
 from decimal import Decimal, ROUND_DOWN
+import bcrypt
 
 from ...database import db
 
@@ -85,7 +86,7 @@ class Admin (db.Model) :
 
     id = db.Column(db.Integer, primary_key = True)
     employee_id = db.Column(db.Integer, unique = True, nullable = False)
-    pin = db.Column(db.Integer, nullable = False)
+    pin = db.Column(db.String(72), nullable = False)
     pin_expiration = db.Column(db.TIMESTAMP(), nullable = False)
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
@@ -94,7 +95,7 @@ class Admin (db.Model) :
     tasks = db.relationship('Task', backref = 'admin', lazy = 'dynamic')
 
     def __init__ (self, pin, name, firebase_uid, created_at) :
-        self.pin = pin
+        self.pin = self.hash_pin(pin) # store hash of pin
         self.name = name
         self.firebase_uid = firebase_uid
         self.created_at = created_at
@@ -115,14 +116,38 @@ class Admin (db.Model) :
         
         return employee_id
     
+    def hash_pin (self, pin) :
+        # ensuring max of 5 digits
+        pin = str(pin)[:5]
+
+        # generate salt and return hash
+        salt = bcrypt.gensalt(12)
+        return bcrypt.hashpw(pin.encode(), salt)
+    
+    def check_pin (self, pinInput) :
+        # if pin is expired, return false
+        if self.is_pin_expired () :
+            return False
+        
+        # else return if the pin matches
+        else :
+            return bcrypt.checkpw(pinInput.encode(), self.pin)
+    
+    
     def is_pin_expired (self) :
         # checking pin expiration
         return datetime.utcnow() > self.pin_expiration
 
-    def renew_pin (self, new_pin) :
-        # renew pin and update pin expiration date (30 days from current time)
-        self.pin = new_pin
-        self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
+    def renew_pin (self, old_pin, new_pin) :
+
+        # if the old pin matches stored pin
+        if bcrypt.checkpw(old_pin.encode(), self.pin) :
+            # renew pin and update pin expiration date (30 days from current time)
+            self.pin = self.hash_pin(new_pin)
+            self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
+        else :
+            # else return false to indicate wrong input of old pin
+            return False
 
 
 # Address
