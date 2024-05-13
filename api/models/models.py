@@ -3,7 +3,7 @@ from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAM
 from sqlalchemy.orm import validates
 from enum import Enum
 import random
-import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 import bcrypt
 
@@ -104,7 +104,7 @@ class Admin (db.Model) :
         self.employee_id = self.generate_unique_employee_id()
 
         # setting initial pin expiration to 30 days after creation
-        self.pin_expiration = datetime.datetime.utcnow() + datetime.timedelta(days = 30)
+        self.pin_expiration = datetime.now(timezone.utc) + timedelta(days = 30)
 
     def generate_unique_employee_id (self) :
         # generating random 8 digit number
@@ -125,13 +125,7 @@ class Admin (db.Model) :
         return bcrypt.hashpw(pin.encode(), salt)
     
     def check_pin (self, pinInput) :
-        # if pin is expired, return false
-        if self.is_pin_expired () :
-            return False
-        
-        # else return if the pin matches
-        else :
-            return bcrypt.checkpw(pinInput.encode(), self.pin)
+        return bcrypt.checkpw(pinInput.encode(), self.pin)
     
     
     def is_pin_expired (self) :

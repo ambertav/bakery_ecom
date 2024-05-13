@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 from firebase_admin import auth
-import datetime
+from datetime import datetime
 
 
 from ...database import db
