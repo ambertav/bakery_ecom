@@ -54,16 +54,28 @@ def admin_signup () :
         }), 500
     
 
-@admin_bp.route('/login', methods = ['POST'])
+@admin_bp.route('/login/', methods = ['POST'])
 def admin_login () :
     try :
         # matching firebase_uid to retrieve admin
         admin = auth_admin(request)
 
         # match employee id and pin
-        # if pin is expired prompt to update pin
-
-        # if no match to employee id and pin, send failure and log out of firebase
+        if str(admin.employee_id) == request.json.get('employeeId') and admin.check_pin(request.json.get('pin')) :
+            # if pin is expired prompt to update pin
+            if not admin.is_pin_expired() :
+                return jsonify({
+                    'message': 'Admin logged in successfully',
+                }), 200
+            else :
+                return jsonify({
+                    'message': 'Pin is expired, please renew pin',
+                }), 403
+        else :
+            # if no match to employee id and pin, send failure and prompt to log out of firebase
+            return jsonify({
+                'error': 'Invalid credientials',
+            }), 401
 
     except Exception as error :
         current_app.logger.error(f'Error logging admin in: {str(error)}')
@@ -71,15 +83,16 @@ def admin_login () :
             'error': 'Internal server error'
         }), 500
     
-# @admin_bp.route('/update-pin', methods = ['POST'])
-# def admin_update_pin () :
+@admin_bp.route('/update-pin/', methods = ['POST'])
+def admin_update_pin () :
 
-#     # retrieve admin from firebase_uid
-#     admin = auth_admin(request)
-#     # match employee id and old pin
-#     # match new pin and confirm new pin
-#     # update pin, update pin expiration
-#     # return success
+    # retrieve admin from firebase_uid
+    admin = auth_admin(request)
+
+    # match employee id and old pin
+    # match new pin and confirm new pin
+    # update pin, update pin expiration
+    # return success
 
 
 
