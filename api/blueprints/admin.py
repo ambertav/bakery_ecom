@@ -85,16 +85,30 @@ def admin_login () :
     
 @admin_bp.route('/update-pin/', methods = ['POST'])
 def admin_update_pin () :
+    try :
+        # retrieve admin from firebase_uid
+        admin = auth_admin(request)
 
-    # retrieve admin from firebase_uid
-    admin = auth_admin(request)
+        data = request.get_json()
 
-    # match employee id and old pin
-    # match new pin and confirm new pin
-    # update pin, update pin expiration
-    # return success
-
-
+        # match employee id and old pin, then renew and update pin_expiration date
+        if str(admin.employee_id) == data.get('employeeId') and admin.renew_pin(data.get('oldPin'), data.get('pin')) :
+            # commit changes to admin only if both conditions are true
+            db.session.commit()
+            return jsonify({
+                'message': 'Pin was updated and admin logged in successfully',
+            }), 200
+        else :
+            db.session.rollback()
+            return jsonify({
+                'error': 'Invalid credientials',
+            }), 401
+        
+    except Exception as error :
+        current_app.logger.error(f'Error updating pin and logging admin in: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 
 @admin_bp.route('/validate-code/', methods = ['POST'])

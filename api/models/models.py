@@ -127,7 +127,6 @@ class Admin (db.Model) :
     def check_pin (self, pinInput) :
         return bcrypt.checkpw(pinInput.encode(), self.pin)
     
-    
     def is_pin_expired (self) :
         # checking pin expiration
         return datetime.utcnow() > self.pin_expiration
@@ -138,7 +137,9 @@ class Admin (db.Model) :
         if bcrypt.checkpw(old_pin.encode(), self.pin) :
             # renew pin and update pin expiration date (30 days from current time)
             self.pin = self.hash_pin(new_pin)
-            self.pin_expiration = datetime.utcnow() + datetime.timedelta(days = 30)
+            self.pin_expiration = datetime.now(timezone.utc) + timedelta(days = 30)
+            
+            return True
         else :
             # else return false to indicate wrong input of old pin
             return False
