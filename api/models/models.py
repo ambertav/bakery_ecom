@@ -33,7 +33,7 @@ class Product (db.Model) :
     category = db.Column(db.Enum(Category), nullable = False)
     image = db.Column(db.String(), nullable = False, default = 'https://example.com/default_image.jpg')
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
-    stock = db.Column(db.Numeric(precision = 5, scale = 3), nullable = False)
+    stock = db.Column(db.Numeric(precision = 10, scale = 3), nullable = False)
 
     __table_args__ = (
         CheckConstraint('stock >= 0', name = 'non_negative_stock'),
@@ -46,8 +46,8 @@ class Product (db.Model) :
         self.description = description
         self.category = category
         self.image = image or 'https://example.com/default_image.jpg'
-        self.price = price
-        self.stock = stock
+        self.price = float(price)
+        self.stock = float(stock)
     
     def as_dict (self) : 
         return {
