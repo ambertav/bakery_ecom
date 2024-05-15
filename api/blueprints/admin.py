@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 from firebase_admin import auth
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 from ...database import db
@@ -24,7 +24,7 @@ def admin_signup () :
             }), 400
         
         # setting admin status on firebase claims
-        auth.set_custom_user_claims(uid, { 'admin': True })
+        # auth.set_custom_user_claims(uid, { 'admin': True })
         
 
         # creating admin
@@ -32,7 +32,7 @@ def admin_signup () :
             'name': request.json.get('name'),
             'firebase_uid': uid,
             'pin': request.json.get('pin'),
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         }
 
         new_admin = Admin(**admin_data)

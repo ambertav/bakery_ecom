@@ -129,7 +129,7 @@ class Admin (db.Model) :
     
     def is_pin_expired (self) :
         # checking pin expiration
-        return datetime.utcnow() > self.pin_expiration
+        return datetime.now() > self.pin_expiration
 
     def renew_pin (self, old_pin, new_pin) :
 
