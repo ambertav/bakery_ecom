@@ -1,9 +1,10 @@
 import pytest, datetime, uuid
 from sqlalchemy.sql.expression import delete
+from datetime import datetime, timezone
 
 from ..app import create_app
 from ..database import db
-from ..api.models.models import User, Role, Address, Product, Cart_Item, Order
+from ..api.models.models import User, Admin, Address, Product, Cart_Item, Order, Task
 
 def generate_firebase_uid():
     uid = str(uuid.uuid4())
@@ -39,8 +40,10 @@ def database_cleanup (flask_app) :
         tables_in_cascade_deletion_order = [
             Cart_Item,
             Order,
+            Task,
             Address,
             User,
+            Admin,
             Product,
         ]
 
@@ -62,36 +65,30 @@ def database_cleanup (flask_app) :
 
 @pytest.fixture(scope = 'session')
 def create_admin_user () :
-    test_uid = generate_firebase_uid()
+    admin_uid = generate_firebase_uid()
     
-    user = User(
+    admin = Admin(
         name = 'Admin',
-        firebase_uid = test_uid,
-        role = Role.ADMIN,
-        stripe_customer_id = None,
-        billing_address = None,
-        shipping_address = None,
-        created_at = datetime.datetime.utcnow()
+        pin = 12345,
+        firebase_uid = admin_uid,
+        created_at = datetime.now(timezone.utc)
     )
-    db.session.add(user)
+    db.session.add(admin)
     db.session.commit()
 
-    return user, test_uid
+    return admin, admin_uid
 
 @pytest.fixture(scope = 'session')
 def create_client_user () :
-    test_uid = generate_firebase_uid()
+    user_uid = generate_firebase_uid()
 
     user = User(
         name = 'Client',
-        firebase_uid = test_uid,
-        role = Role.CLIENT,
+        firebase_uid = user_uid,
         stripe_customer_id = None,
-        billing_address = None,
-        shipping_address = None,
-        created_at = datetime.datetime.utcnow()
+        created_at = datetime.now(timezone.utc)
     )
     db.session.add(user)
     db.session.commit()
 
-    return user, test_uid
+    return user, user_uid
