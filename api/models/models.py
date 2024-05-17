@@ -87,10 +87,10 @@ class Admin (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     employee_id = db.Column(db.Integer, unique = True, nullable = False)
     pin = db.Column(db.String(72), nullable = False)
-    pin_expiration = db.Column(db.TIMESTAMP(), nullable = False)
+    pin_expiration = db.Column(db.DateTime(timezone = True), nullable = False)
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
-    created_at = db.Column(db.TIMESTAMP(), nullable = False)
+    created_at = db.Column(db.DateTime(timezone = True), nullable = False)
 
     tasks = db.relationship('Task', backref = 'admin', lazy = 'dynamic')
 
@@ -104,17 +104,17 @@ class Admin (db.Model) :
         self.employee_id = self.generate_unique_employee_id()
 
         # setting initial pin expiration to 30 days after creation
-        self.pin_expiration = datetime.now(timezone.utc) + timedelta(days = 30)
+        self.pin_expiration = self.created_at + timedelta(days = 30)
 
     def generate_unique_employee_id (self) :
         # generating random 8 digit number
-        employee_id = random.randint(10000000, 99999999)
+        id = random.randint(10000000, 99999999)
         
         # checking if employee_id already exists in database
-        while Admin.query.filter_by(employee_id = employee_id).first() :
-            employee_id = random.randint(10000000, 99999999)
+        while Admin.query.filter_by(employee_id = id).first() :
+            id = random.randint(10000000, 99999999)
         
-        return employee_id
+        return id
     
     def hash_pin (self, pin) :
         # ensuring max of 5 digits
@@ -125,16 +125,16 @@ class Admin (db.Model) :
         return bcrypt.hashpw(pin.encode(), salt)
     
     def check_pin (self, pinInput) :
-        return bcrypt.checkpw(pinInput.encode(), self.pin)
+        return bcrypt.checkpw(str(pinInput).encode(), self.pin)
     
     def is_pin_expired (self) :
         # checking pin expiration
-        return datetime.now() > self.pin_expiration
+        return datetime.now(timezone.utc) > self.pin_expiration
 
     def renew_pin (self, old_pin, new_pin) :
 
         # if the old pin matches stored pin
-        if bcrypt.checkpw(old_pin.encode(), self.pin) :
+        if bcrypt.checkpw(str(old_pin).encode(), self.pin) :
             # renew pin and update pin expiration date (30 days from current time)
             self.pin = self.hash_pin(new_pin)
             self.pin_expiration = datetime.now(timezone.utc) + timedelta(days = 30)
