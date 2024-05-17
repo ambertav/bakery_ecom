@@ -69,7 +69,7 @@ def create_admin_user () :
     
     admin = Admin(
         name = 'Admin',
-        pin = 12345,
+        pin = 11111,
         firebase_uid = admin_uid,
         created_at = datetime.now(timezone.utc)
     )

@@ -6,7 +6,59 @@ import os
 from ..database import db
 from ..api.models.models import Admin
 
-# mock firebase, user sign up
+
+def test_generate_unique_employee_id (flask_app, create_admin_user) :
+    admin, test_uid = create_admin_user
+    generated_ids = [admin.generate_unique_employee_id() for _ in range(1000)]
+
+    assert len(generated_ids) == len(set(generated_ids))
+
+def test_hash_pin (flask_app, create_admin_user) :
+    # created with pin = 11111
+    admin, test_uid = create_admin_user
+
+    # ensuring that pin exists and was not saved unhashed
+    assert admin.pin is not None
+    assert admin.pin != 11111
+
+
+def test_check_pin (flask_app, create_admin_user) :
+    # created with pin = 11111
+    admin, test_uid = create_admin_user
+
+    assert admin.check_pin(11111) is True
+    assert admin.check_pin(00000) is False
+
+def test_is_pin_expired (flask_app, create_admin_user) :
+    # created with pin = 11111
+    admin, test_uid = create_admin_user
+    # asserting that pin is not expired upon creation
+    assert admin.is_pin_expired() is False
+
+    # manually expiring pin, asserting that method now returns True
+    admin.pin_expiration = datetime.now(timezone.utc) - timedelta(days = 1)
+    assert admin.is_pin_expired() is True
+
+
+def test_renew_pin (flask_app, create_admin_user) :
+    # created with pin = 11111
+    admin, test_uid = create_admin_user
+
+    # should still be expired from previous test
+    assert admin.is_pin_expired() is True
+
+    # change pin from 11111 to 12345
+    admin.renew_pin(11111, 12345)
+
+    # checking that pin expiration was updated
+    assert admin.is_pin_expired() is False
+
+    # checking that pin was actually changed
+    assert admin.check_pin(12345) is True
+    assert admin.check_pin(11111) is False
+
+
+# tests for admin controllers
 def test_signup (flask_app) :
     with patch('firebase_admin.auth.verify_id_token') as mock_verify_id_token :
         mock_verify_id_token.return_value = { 'uid': 'mock_uid' }
@@ -107,8 +159,8 @@ def test_update_pin (flask_app, valid_id, valid_pin) :
             # need to pass values as str to mimic http request body
             json = {
                 'employeeId': str(employee_id),
-                'oldPin': str(old_pin),
-                'pin': '67890'
+                'oldPin': old_pin,
+                'pin': 67890
             }
         )
 
