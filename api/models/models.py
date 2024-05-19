@@ -333,6 +333,18 @@ class Order (db.Model) :
         self.payment_status = payment_status
         self.shipping_address_id = shipping_address_id
 
+    # method to create basic task associated to order instance
+    def create_associated_task (self) :
+        task = Task(
+            admin_id = None,
+            order_id = self.id,
+            assigned_at = None,
+            completed_at = None,
+        )
+
+        db.session.add(task)
+        db.session.commit()
+
     def as_dict (self) :
         return {
             'id': self.id,
@@ -348,9 +360,9 @@ class Task (db.Model) :
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key = True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable = False) 
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable = True) 
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable = False)
-    assigned_at = db.Column(db.TIMESTAMP(), nullable = False)
+    assigned_at = db.Column(db.TIMESTAMP(), nullable = True)
     completed_at = db.Column(db.TIMESTAMP(), nullable = True)
 
     def __init__ (self, admin_id, order_id, assigned_at, completed_at) :
@@ -367,6 +379,6 @@ class Task (db.Model) :
             'id': self.id,
             'adminName': admin_name,
             'orderId': self.order_id,
-            'assignedAt': self.assigned_at.strftime('%m/%d/%Y %I:%M %p'),
-            'completedAt': self.completed_at.strftime('%m/%d/%Y %I:%M %p'),
+            'assignedAt': None if self.assigned_at is None else self.assigned_at.strftime('%m/%d/%Y %I:%M %p'),
+            'completedAt': None if self.completed_at is None else self.completed_at.strftime('%m/%d/%Y %I:%M %p')
         }
