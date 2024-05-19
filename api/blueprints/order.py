@@ -425,7 +425,6 @@ def create_order (address, user, method) :
             shipping_address_id = address,
         )
 
-
         db.session.add(new_order)
 
         # commit and refresh to get access to new_order.id
@@ -447,7 +446,10 @@ def create_order (address, user, method) :
                 item.product.stock -= Decimal(item.quantity)
 
         db.session.commit()
-        
+
+        # use class method to create and associate task for new order
+        new_order.create_associated_task()
+
         return new_order
         
     except Exception as error :
