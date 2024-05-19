@@ -39,8 +39,8 @@ def database_cleanup (flask_app) :
         # list of tables in order for successful cascade deletion
         tables_in_cascade_deletion_order = [
             Cart_Item,
-            Order,
             Task,
+            Order,
             Address,
             User,
             Admin,

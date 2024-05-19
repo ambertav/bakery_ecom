@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, Text, Numeric, Boolean, TIMESTAMP, ForeignKey, CheckConstraint, and_, or_
 from sqlalchemy.orm import validates
+from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
 import random
 from datetime import datetime, timedelta, timezone
@@ -335,15 +336,20 @@ class Order (db.Model) :
 
     # method to create basic task associated to order instance
     def create_associated_task (self) :
-        task = Task(
-            admin_id = None,
-            order_id = self.id,
-            assigned_at = None,
-            completed_at = None,
-        )
+        try :
+            task = Task(
+                admin_id = None,
+                order_id = self.id,
+                assigned_at = None,
+                completed_at = None,
+            )
+            db.session.add(task)
+            db.session.commit()
+            return task
+        except SQLAlchemyError as error :
+            db.session.rollback()
+            raise error
 
-        db.session.add(task)
-        db.session.commit()
 
     def as_dict (self) :
         return {
