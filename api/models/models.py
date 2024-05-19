@@ -322,7 +322,7 @@ class Order (db.Model) :
     address = db.relationship('Address', backref = 'orders', foreign_keys = [shipping_address_id])
 
     # one to one relationship, cascade deletion
-    task = db.relationship('Task', backref = 'order', uselist = False, cascade = 'all, delete-orphan')
+    task = db.relationship('Task', backref = 'order', uselist = False, lazy = 'joined', cascade = 'all, delete-orphan')
 
     def __init__ (self, user_id, date, total_price, status, stripe_payment_id, delivery_method, payment_status, shipping_address_id) :
         self.user_id = user_id
@@ -376,6 +376,32 @@ class Task (db.Model) :
         self.order_id = order_id
         self.assigned_at = assigned_at
         self.completed_at = completed_at
+
+    # assigns an admin if an admin is not already assigned
+    def assign_admin (self, admin) :
+        if self.admin_id or self.assigned_at is not None :
+            return False
+        else :
+            self.admin_id = admin.id
+            self.assigned_at = datetime.now(timezone.utc)
+            return True
+
+    # unassigns an admin if task is not already completed
+    def unassign_admin (self) :
+        if self.completed_at is not None :
+            return False
+        else :
+            self.admin_id = None
+            self.assigned_at = None
+            return True
+
+    # completes task as long as an admin is assigned
+    def complete (self) :
+        if self.admin_id is not None and self.assigned_at is not None :
+            self.completed_at = datetime.now(timezone.utc)
+            return True
+        else :
+            return False
 
     def as_dict (self) :
         admin = Admin.query.get(self.admin_id)
