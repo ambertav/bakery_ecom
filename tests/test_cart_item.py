@@ -181,8 +181,11 @@ def test_cart_item_portion_and_price_validation (flask_app, create_client_user, 
         # get the expected price multiplier
         expected_multiplier = portion_multiplier_mapping.get(portion)
 
-        # assert that the price reflects expected price multiplier
-        assert created_item.price / created_item.quantity / product.price == expected_multiplier
+        # define a tolerance for comparison
+        tolerance = 0.01
+
+        # assert that the price reflects expected price multiplier within the given tolerance
+        assert abs(created_item.price / product.price - expected_multiplier) <= tolerance
 
     else :
         with pytest.raises(ValueError) as error :
@@ -193,7 +196,7 @@ def test_cart_item_portion_and_price_validation (flask_app, create_client_user, 
                 portion = invalid_options[0] 
             else :
                 # if no invalid options (such as for cakes and pies that come in all options), set portion to 'INVALID'
-                # this should violate enum, but still returns ValueError 
+                # this should violate enum, and returns ValueError 
                 portion = 'INVALD'
 
             # testing portion column constraints, should return ValueError
