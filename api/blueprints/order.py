@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
+from sqlalchemy.orm import joinedload
 import stripe
 import os
 import json
@@ -153,6 +154,8 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
                 # add delivery method filter if present
                 base_query = base_query.filter_by(delivery_method = Deliver_Method[delivery_method.upper()])
 
+            # join task with order
+            base_query = base_query.options(joinedload(Order.task))
 
             # makes query, orders by date, paginates
             orders = (
@@ -162,9 +165,13 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             )
 
             if orders.items :
-                # formats orders and corresponding cart_items
+                # formats orders and corresponding cart_items and tasks
                 order_history = [
-                    { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
+                    { 
+                        **order.as_dict(), 
+                        'items': [ item.as_dict() for item in order.cart_items ],
+                        'task': order.task.as_dict() if order.task else None 
+                    }
                     for order in orders.items
                 ]
 
