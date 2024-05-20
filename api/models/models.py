@@ -378,11 +378,11 @@ class Task (db.Model) :
         self.completed_at = completed_at
 
     # assigns an admin if an admin is not already assigned
-    def assign_admin (self, admin) :
+    def assign_admin (self, admin_id) :
         if self.admin_id or self.assigned_at is not None :
             return False
         else :
-            self.admin_id = admin.id
+            self.admin_id = admin_id
             self.assigned_at = datetime.now(timezone.utc)
             return True
 

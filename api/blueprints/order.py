@@ -188,7 +188,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
         }), 500
 
 @order_bp.route('/fulfillment/set-in-progress/', methods = ['PUT'])
-def start_orders_and_create_admin_tasks () :
+def start_orders_and_assign_admin_tasks () :
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -209,14 +209,9 @@ def start_orders_and_create_admin_tasks () :
                     if order :
                         # set order status to in progress
                         order.status = Order_Status.IN_PROGRESS
-                        # create a new task, associating order and admin user
-                        task = Task(
-                            admin_id = admin.id,
-                            order_id = order_id,
-                            created_at = datetime.datetime.now(),
-                            completed_at = None
-                        )
-                        db.session.add(task)
+                        # query for task and assign admin
+                        task = Task.query.filter_by(order_id = order.id).first()
+                        task.assign_admin(admin.id)
                     else :
                         raise ValueError(f'Order with id {order_id} was not found')
 
@@ -239,7 +234,7 @@ def start_orders_and_create_admin_tasks () :
         }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
-def return_order_to_pending (id) :
+def return_order_to_pending (order_id) :
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -248,8 +243,8 @@ def return_order_to_pending (id) :
                 'error': 'Authentication failed'
             }), 401
         
-        # verify that user owns task
-        task = Task.query.filter_by(order_id = id, admin_id = admin)
+        # query for and verify that requesting admin is assigned to the task
+        task = Task.query.filter_by(order_id = order_id, admin_id = admin.id)
         if not task :
             return jsonify({
                 'error': 'Forbidden'
@@ -259,13 +254,13 @@ def return_order_to_pending (id) :
         order = Order.query.get(id)
         order.status = Order_Status.PENDING
 
-        # delete task
-        task.delete()
+        # unassign admin from task
+        task.unassign_admin()
 
         db.session.commit()
 
         return jsonify({
-            'message': 'Order was successfully returned to pending and task was unassigned'
+            'message': 'Order was successfully returned to pending and admin was unassigned'
         }), 200
 
 
