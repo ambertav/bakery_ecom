@@ -241,7 +241,7 @@ def start_orders_and_assign_admin_tasks () :
         }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
-def return_order_to_pending (order_id) :
+def return_order_to_pending (id) :
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -251,7 +251,7 @@ def return_order_to_pending (order_id) :
             }), 401
         
         # query for and verify that requesting admin is assigned to the task
-        task = Task.query.filter_by(order_id = order_id, admin_id = admin.id)
+        task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
         if not task :
             return jsonify({
                 'error': 'Forbidden'
@@ -279,7 +279,39 @@ def return_order_to_pending (order_id) :
 
 @order_bp.route('/fulfillment/<int:id>/set-complete/', methods = ['PUT'])
 def complete_order_fulfillment (id) :
-    pass
+    try :
+        # authentication and authorization check
+        admin = auth_admin(request)
+        if admin is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        # query for and verify that requesting admin is assigned to the task
+        task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
+        if not task :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
+        # set order to completed
+        order = Order.query.get(id)
+        order.status = Order_Status.COMPLETED
+
+        # complete task
+        task.complete()
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Order and associated task were successfully completed'
+        }), 200
+
+    except Exception as error :
+        current_app.logger.error(f'Error completing order and task: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 @order_bp.route('/create-checkout-session', methods = ['POST'])
 def create_checkout_session() :
