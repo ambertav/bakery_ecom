@@ -5,6 +5,7 @@ import datetime
 import random
 
 from unittest.mock import patch, MagicMock
+from sqlalchemy.sql.expression import func
 
 from ..database import db
 from ..config import config
@@ -157,8 +158,6 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
     updated_user = User.query.get(user.id)
     assert updated_user.stripe_customer_id == mock_payload_data['data']['object']['customer']
 
-
-
             
 @pytest.mark.parametrize('requesting_recents', (True, False))
 def test_order_history (flask_app, create_client_user, seed_database, requesting_recents) :
@@ -222,65 +221,142 @@ def test_show_order (flask_app, create_client_user) :
     unittest.TestCase().assertDictEqual(order_dict, response.json['order'])
 
 
-# @pytest.mark.parametrize('status, isFilter, isSearch', [
-#     ('pending', False, False),
-#     ('pending', True, False),
-#     ('pending', False, True),
-#     ('in-progress', False, False),
-#     ('in-progress', True, False),
-#     ('in-progress', False, True),
-# ])
-# def test_order_fulfillment (flask_app, create_admin_user, status, isFilter, isSearch) :
-#     admin, test_uid = create_admin_user
+@pytest.mark.parametrize('status, is_filter, is_search', [
+    ('pending', False, False),
+    ('pending', True, False),
+    ('pending', False, True),
+    ('in-progress', False, False),
+    ('in-progress', True, False),
+    ('in-progress', False, True),
+])
+def test_order_fulfillment (flask_app, create_admin_user, status, is_filter, is_search) :
+    admin, test_uid = create_admin_user
 
-#     # retrieve an order to search by
-#     order = Order.query.first()
+    # retrieve an order to search by
+    order = Order.query.first()
 
-#     # initalize param strings
-#     delivery_param = random.choice(list(Deliver_Method)).value if isFilter else ''
-#     # random between order id and 0
-#     search_param = random.choice([order.id, 0]) if isSearch else ''
+    # initalize param strings
+    delivery_param = random.choice(list(Deliver_Method)).value if is_filter else ''
+    # random between order id and 0
+    search_param = random.choice([order.id, 0]) if is_search else ''
 
-#     # format query params for request
-#     query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value }
+    # format query params for request
+    query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value is not None }
 
-#     with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
-#         response = flask_app.get(f'/api/order/fulfillment/{status}/',
-#             query_string = query_params,
-#             headers = { 'Authorization': f'Bearer {test_uid}' }
-#         )
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.get(f'/api/order/fulfillment/{status}/',
+            query_string = query_params,
+            headers = { 'Authorization': f'Bearer {test_uid}' }
+        )
 
-#     assert response.status_code in [200, 308]
+    assert response.status_code in [200, 308]
 
-#     if isSearch :
-#         # if searching, query for the order in database
-#         searched_order = Order.query.get(search_param)
-#         if searched_order :
-#             # assert that only 1 was returned in response, and matched queried order
-#             assert len(response.json['orders']) is 1
-#             assert response.json['orders'][0]['id'] == searched_order.id
-#         else :
-#             # otherwise, assert message if none returned
-#             unittest.TestCase().assertListEqual([], response.json['orders'])
-#             assert response.json['message'] == 'Order not found'
-#     else :
-#         # base count query
-#         count_query = Order.query.filter_by(status = Order_Status[status.upper().replace("-", "_")])
+    if is_search :
+        # if searching, query for the order in database
+        searched_order = Order.query.get(search_param)
+        if searched_order :
+            # assert that only 1 was returned in response, and matched queried order
+            assert len(response.json['orders']) is 1
+            assert response.json['orders'][0]['id'] == searched_order.id
+        else :
+            # otherwise, assert message if none returned
+            unittest.TestCase().assertListEqual([], response.json['orders'])
+            assert response.json['message'] == 'Order not found'
+    else :
+        # base count query
+        count_query = Order.query.filter_by(status = Order_Status[status.upper().replace("-", "_")])
 
-#         if isFilter :
-#             # addition of filtering by delivery_method 
-#             count_query = count_query.filter_by(delivery_method = Deliver_Method[delivery_param.upper()])
+        if is_filter :
+            # addition of filtering by delivery_method 
+            count_query = count_query.filter_by(delivery_method = Deliver_Method[delivery_param.upper()])
         
-#         # count the orders
-#         count_of_orders = count_query.count()
-#         # assert count from database to response list length
-#         assert len(response.json['orders']) == count_of_orders
+        # count the orders
+        count_of_orders = count_query.count()
+        # assert count from database to response list length
+        assert len(response.json['orders']) == count_of_orders
 
-#         # asserting message if no order
-#         if count_of_orders is 0 :
-#             unittest.TestCase().assertListEqual([], response.json['orders'])
-#             assert response.json['message'] == 'No orders found'
+        # asserting message if no order
+        if count_of_orders is 0 :
+            unittest.TestCase().assertListEqual([], response.json['orders'])
+            assert response.json['message'] == 'No orders found'
 
+@pytest.mark.parametrize('is_batch, is_valid', [
+    (False, False), # single input, invalid id --> 500
+    (False, True), # single input with valid id --> 200
+    (True, False), # batch input with one or more invalid ids --> 500
+    (True, True), # batch input with all valid ids --> 200
+])
+def test_start_orders (flask_app, create_admin_user, is_batch, is_valid) :
+    admin, test_uid = create_admin_user
+
+    if is_batch :
+        # get random orders
+        random_orders = Order.query.with_entities(Order.id).order_by(func.random()).limit(5).all()
+
+        # construct a list of the ids
+        id_list = [order.id for order in random_orders]
+
+        if not is_valid :
+            # if the test case should include invalid ids, add 3 random ids to the list
+            for _ in range(3) :
+                id_list.append(random.randint(1, 10))
+    
+    else :
+        # for single input test cases
+
+        if is_valid :
+            # query for a random order
+            random_order = Order.query.with_entities(Order.id).order_by(func.random()).first()
+            # extract the id and put in list
+            id_list = [random_order.id]
+        else :
+            # if invalid data test case, just create a list of a random invalid number
+            id_list = [random.randint(1, 10)]
+
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/order/fulfillment/set-in-progress/',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+            json = id_list # passing in list of ids or both single and batch test cases
+        )
+
+    if is_valid :
+        assert response.status_code == 200
+        assert response.json['message'] == 'Successfully started orders and created tasks'
+
+        # query for orders with in progress orders
+        in_progress_orders = Order.query.filter_by(status = Order_Status.IN_PROGRESS).all()
+        in_progress_orders_ids = [order.id for order in in_progress_orders]
+
+        # assert that all of the ids included in the request are within the list of orders with in_progress status
+        assert all(id in in_progress_orders_ids for id in id_list)
+
+        # query for associated tasks
+        tasks = Task.query.filter(Task.order_id.in_(id_list)).all()
+        
+        # assert that the admin and assigned_at fields were updated for all tasks
+        for task in tasks :
+            assert task.admin_id is not None
+            assert task.assigned_at is not None
+
+    else :
+        assert response.status_code == 500
+
+        # asserting that valid order ids weren't updated if all of the data wasn't valid
+        order = Order.query.get(id_list[0])
+        if order :
+            assert order.status != Order_Status.IN_PROGRESS
+
+
+def test_return_order_to_pending (flask_app, create_admin_user) :
+    admin, test_uid = create_admin_user
+
+    order = Order.query.first()
+
+
+
+
+def complete_order_fulfillment () :
+    pass
 
 
 
