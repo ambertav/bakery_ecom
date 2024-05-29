@@ -257,19 +257,34 @@ def return_order_to_pending (id) :
                 'error': 'Forbidden'
             }), 403
         
-        # return order to pending
+        # query for order
         order = Order.query.get(id)
-        order.status = Order_Status.PENDING
 
-        # unassign admin from task
-        task.unassign_admin()
+        # if found and current status is pending
+            # return order to pending
+        if order :
+            if order.status == Order_Status.IN_PROGRESS :
+                order.status = Order_Status.PENDING
 
-        db.session.commit()
+                # unassign admin from task
+                task.unassign_admin()
 
-        return jsonify({
-            'message': 'Order was successfully returned to pending and admin was unassigned'
-        }), 200
+                db.session.commit()
 
+                return jsonify({
+                    'message': 'Order was successfully returned to pending and admin was unassigned'
+                }), 200
+            
+            # 400 code if order status isn't currently IN_PROGRESS
+            else :
+                return jsonify({
+                    'message': 'Order status could not be updated'
+                }), 400
+
+        else :
+            return jsonify({
+                'message': 'Order not found'
+            }), 404
 
     except Exception as error :
         current_app.logger.error(f'Error returning order to pending status: {str(error)}')
@@ -294,18 +309,35 @@ def complete_order_fulfillment (id) :
                 'error': 'Forbidden'
             }), 403
         
-        # set order to completed
+        # query for order
         order = Order.query.get(id)
-        order.status = Order_Status.COMPLETED
 
-        # complete task
-        task.complete()
+        # if found and current status is pending
+            # set order to completed
+        if order :
+            if order.status == Order_Status.IN_PROGRESS :
+                order.status = Order_Status.COMPLETED
 
-        db.session.commit()
+                # complete task
+                task.complete()
 
-        return jsonify({
-            'message': 'Order and associated task were successfully completed'
-        }), 200
+                db.session.commit()
+
+                return jsonify({
+                    'message': 'Order and associated task were successfully completed'
+                }), 200
+            
+            # 400 code if order status isn't currently IN_PROGRESS
+            else :
+                return jsonify({
+                    'message': 'Order status could not be updated'
+                }), 400
+
+        else :
+            return jsonify({
+                'message': 'Order not found'
+            }), 404
+
 
     except Exception as error :
         current_app.logger.error(f'Error completing order and task: {str(error)}')
