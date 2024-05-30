@@ -346,17 +346,125 @@ def test_start_orders (flask_app, create_admin_user, is_batch, is_valid) :
         if order :
             assert order.status != Order_Status.IN_PROGRESS
 
-
-def test_return_order_to_pending (flask_app, create_admin_user) :
+@pytest.mark.parametrize('valid_admin, valid_order, valid_status', [
+    (True, True, True), # valid request --> 200
+    (True, False, None), # invalid --> 404, order not found
+    (True, True, False), # invalid --> 400, order has to be in progress
+    (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
+])
+def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, valid_admin, valid_order, valid_status) :
     admin, test_uid = create_admin_user
+    second_admin, second_uid = create_second_admin_user
 
-    order = Order.query.first()
+    if valid_order :
+        # search for order in db
+        order = Order.query.first()
+        order_id = order.id
 
+        if valid_status :
+            # set status to in pending
+                # assign admin to task
+            order.status = Order_Status.IN_PROGRESS
+            task = Task.query.filter_by(order_id = order.id).first()
+            task.assign_admin(admin.id)
 
+        if not valid_admin :
+            # set requesting admin to another admin that is not associated
+            test_uid = second_uid
 
+    else :
+        # get random invalid order id
+        order_id = random.randint(1, 10)
 
-def complete_order_fulfillment () :
-    pass
+    
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-pending/',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
+
+    if valid_order :
+        if valid_status :
+            if valid_admin :
+                assert response.status_code == 200
+                assert response.json['message'] == 'Order was successfully returned to pending and admin was unassigned'
+
+                updated_order = Order.query.get(order_id)
+                assert updated_order.status == Order_Status.PENDING
+
+                updated_task = Task.query.filter_by(order_id = order_id).first()
+                assert updated_task.admin_id is None
+                assert updated_task.assigned_at is None
+
+            else :
+                assert response.status_code == 403
+                assert response.json['error'] == 'Forbidden'
+        else :
+            assert response.status_code == 400
+            assert response.json['error'] == 'Order status could not be updated'
+    else :
+        assert response.status_code == 404
+        assert response.json['error'] == 'Order not found'
+
+    
+
+@pytest.mark.parametrize('valid_admin, valid_order, valid_status', [
+    (True, True, True), # valid request --> 200
+    (True, False, None), # invalid --> 404, order not found
+    (True, True, False), # invalid --> 400, order has to be in progress
+    (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
+])
+def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, valid_admin, valid_order, valid_status) :
+    admin, test_uid = create_admin_user
+    second_admin, second_uid = create_second_admin_user
+
+    if valid_order :
+        # search for order in db
+        order = Order.query.first()
+        order_id = order.id
+
+        if valid_status :
+            # set status to in pending
+                # assign admin to task
+            order.status = Order_Status.IN_PROGRESS
+            task = Task.query.filter_by(order_id = order.id).first()
+            task.assign_admin(admin.id)
+
+        if not valid_admin :
+            # set requesting admin to another admin that is not associated
+            test_uid = second_uid
+
+    else :
+        # get random invalid order id
+        order_id = random.randint(1, 10)
+
+    
+    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-complete/',
+            headers = { 'Authorization': f'Bearer {test_uid}' },
+        )
+
+    if valid_order :
+        if valid_status :
+            if valid_admin :
+                assert response.status_code == 200
+                assert response.json['message'] == 'Order and associated task were successfully completed'
+
+                updated_order = Order.query.get(order_id)
+                assert updated_order.status == Order_Status.COMPLETED
+
+                updated_task = Task.query.filter_by(order_id = order_id).first()
+                assert updated_task.completed_at is not None
+
+            else :
+                assert response.status_code == 403
+                assert response.json['error'] == 'Forbidden'
+        else :
+            assert response.status_code == 400
+            assert response.json['error'] == 'Order status could not be updated'
+    else :
+        assert response.status_code == 404
+        assert response.json['error'] == 'Order not found'
+
 
 
 
