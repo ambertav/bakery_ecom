@@ -250,13 +250,6 @@ def return_order_to_pending (id) :
                 'error': 'Authentication failed'
             }), 401
         
-        # query for and verify that requesting admin is assigned to the task
-        task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-        if not task :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
-        
         # query for order
         order = Order.query.get(id)
 
@@ -265,6 +258,13 @@ def return_order_to_pending (id) :
         if order :
             if order.status == Order_Status.IN_PROGRESS :
                 order.status = Order_Status.PENDING
+
+                # query for and verify that requesting admin is assigned to the task
+                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
+                if not task :
+                    return jsonify({
+                        'error': 'Forbidden'
+                    }), 403
 
                 # unassign admin from task
                 task.unassign_admin()
@@ -278,12 +278,12 @@ def return_order_to_pending (id) :
             # 400 code if order status isn't currently IN_PROGRESS
             else :
                 return jsonify({
-                    'message': 'Order status could not be updated'
+                    'error': 'Order status could not be updated'
                 }), 400
 
         else :
             return jsonify({
-                'message': 'Order not found'
+                'error': 'Order not found'
             }), 404
 
     except Exception as error :
@@ -302,13 +302,6 @@ def complete_order_fulfillment (id) :
                 'error': 'Authentication failed'
             }), 401
         
-        # query for and verify that requesting admin is assigned to the task
-        task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-        if not task :
-            return jsonify({
-                'error': 'Forbidden'
-            }), 403
-        
         # query for order
         order = Order.query.get(id)
 
@@ -317,6 +310,13 @@ def complete_order_fulfillment (id) :
         if order :
             if order.status == Order_Status.IN_PROGRESS :
                 order.status = Order_Status.COMPLETED
+
+                # query for and verify that requesting admin is assigned to the task
+                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
+                if not task :
+                    return jsonify({
+                        'error': 'Forbidden'
+                    }), 403
 
                 # complete task
                 task.complete()
@@ -330,12 +330,12 @@ def complete_order_fulfillment (id) :
             # 400 code if order status isn't currently IN_PROGRESS
             else :
                 return jsonify({
-                    'message': 'Order status could not be updated'
+                    'error': 'Order status could not be updated'
                 }), 400
 
         else :
             return jsonify({
-                'message': 'Order not found'
+                'error': 'Order not found'
             }), 404
 
 
