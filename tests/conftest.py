@@ -78,8 +78,39 @@ def create_admin_user () :
 
     return admin, admin_uid
 
+
+@pytest.fixture(scope = 'session')
+def create_second_admin_user () :
+    admin_uid = generate_firebase_uid()
+    
+    admin = Admin(
+        name = 'Admin',
+        pin = 11111,
+        firebase_uid = admin_uid,
+        created_at = datetime.now(timezone.utc)
+    )
+    db.session.add(admin)
+    db.session.commit()
+
+    return admin, admin_uid
+
 @pytest.fixture(scope = 'session')
 def create_client_user () :
+    user_uid = generate_firebase_uid()
+
+    user = User(
+        name = 'Client',
+        firebase_uid = user_uid,
+        stripe_customer_id = None,
+        created_at = datetime.now(timezone.utc)
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    return user, user_uid
+
+@pytest.fixture(scope = 'session')
+def create_second_client_user () :
     user_uid = generate_firebase_uid()
 
     user = User(
