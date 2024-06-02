@@ -2,10 +2,8 @@ import pytest
 import unittest
 import random
 
-from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-from decimal import Decimal
 
 from ..database import db
 from ..api.models.models import Product, Category
@@ -34,7 +32,7 @@ def test_product_validation(flask_app, name, description, category, image, price
 
 # controller logic tests
 @pytest.mark.parametrize('role', ['ADMIN', 'CLIENT'])
-def test_product_creation(flask_app, create_admin_user, create_client_user, role) :
+def test_product_creation(flask_app, create_admin_user, create_client_user, mock_firebase, role) :
     # creates users with different roles
     if role == 'ADMIN' :
         admin, test_uid = create_admin_user 
@@ -42,7 +40,7 @@ def test_product_creation(flask_app, create_admin_user, create_client_user, role
         user, test_uid = create_client_user
 
     # req to create product
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.post('/api/product/create', 
             headers = { 'Authorization': f'Bearer {test_uid}' }, 
             json = {
@@ -110,13 +108,13 @@ def test_product_index (flask_app, requesting_category, searching) :
 
 
 @pytest.mark.parametrize('role', ['ADMIN', 'CLIENT'])
-def test_user_view_of_product_index (flask_app, create_admin_user, create_client_user, role) :
+def test_view_of_product_index (flask_app, create_admin_user, create_client_user, mock_firebase, role) :
     if role == 'ADMIN' :
         admin, test_uid = create_admin_user
     else :
         user, test_uid = create_client_user
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get('/api/product/', 
             headers = { 'Authorization': f'Bearer {test_uid}' }, 
         )
@@ -153,7 +151,7 @@ def test_product_show (flask_app) :
     ('ADMIN', False),
     ('CLIENT', None),
 ])
-def test_product_update (flask_app, create_admin_user, create_client_user, role, valid_product) :
+def test_product_update (flask_app, create_admin_user, create_client_user, mock_firebase, role, valid_product) :
     # creates users with different roles
     if role == 'ADMIN' :
         admin, test_uid = create_admin_user 
@@ -173,7 +171,7 @@ def test_product_update (flask_app, create_admin_user, create_client_user, role,
     }
 
     # req to edit product
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/product/{product_id}/update', 
             headers = { 'Authorization': f'Bearer {test_uid}' }, 
             json = updated_data
@@ -198,7 +196,7 @@ def test_product_update (flask_app, create_admin_user, create_client_user, role,
 
 
 @pytest.mark.parametrize('valid_product_ids', [True, False])
-def test_product_update_inventory (flask_app, create_admin_user, valid_product_ids) :
+def test_product_update_inventory (flask_app, create_admin_user, mock_firebase, valid_product_ids) :
     user, test_uid = create_admin_user
 
     if valid_product_ids :
@@ -217,7 +215,7 @@ def test_product_update_inventory (flask_app, create_admin_user, valid_product_i
         }
 
     # req to edit product
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put('/api/product/inventory/update', 
             headers = { 'Authorization': f'Bearer {test_uid}' }, 
             json = input

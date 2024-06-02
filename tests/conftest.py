@@ -1,4 +1,6 @@
-import pytest, datetime, uuid
+import pytest
+import uuid
+from unittest.mock import patch, MagicMock
 from sqlalchemy.sql.expression import delete
 from datetime import datetime, timezone
 
@@ -61,6 +63,13 @@ def database_cleanup (flask_app) :
     finally :
         # close connection
         connection.close()
+
+
+@pytest.fixture(scope = 'session')
+def mock_firebase(request):
+    def _mock_firebase(test_uid):
+        return patch('firebase_admin.auth.verify_id_token', MagicMock(return_value={'uid': test_uid}))
+    return _mock_firebase
 
 
 @pytest.fixture(scope = 'session')
