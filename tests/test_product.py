@@ -3,7 +3,6 @@ import unittest
 import random
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text
 
 from ..database import db
 from ..api.models.models import Product, Category

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from ..database import db
 from .conftest import generate_firebase_uid
-from ..api.models.models import Task, Order, Admin,  Order_Status, Deliver_Method, Pay_Status, User, Address, Cart_Item, Portion, Product, Category
+from ..api.models.models import Order, Admin,  Order_Status, Deliver_Method, Pay_Status, User, Address, Cart_Item, Portion, Product, Category
 
 @pytest.fixture(scope = 'module')
 def seed_database (flask_app, create_client_user) :

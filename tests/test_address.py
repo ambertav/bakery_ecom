@@ -2,7 +2,6 @@ import pytest
 import unittest
 import datetime
 
-from unittest.mock import patch, MagicMock
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError
 
