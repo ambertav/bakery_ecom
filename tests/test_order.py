@@ -61,7 +61,7 @@ def seed_database (flask_app, create_client_user) :
 
 # testing case of existing address or new address submitted
 @pytest.mark.parametrize('to_create_address', (True, False))
-def test_create_checkout_session (flask_app, create_client_user, seed_database, to_create_address) :
+def test_create_checkout_session (flask_app, create_client_user, mock_firebase, seed_database, to_create_address) :
     user, test_uid = create_client_user
     cart_item, address = seed_database
 
@@ -80,7 +80,7 @@ def test_create_checkout_session (flask_app, create_client_user, seed_database, 
         # if not case of new address, use existing
         shipping = address.as_dict()
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.post('/api/order/create-checkout-session',
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = {
@@ -100,7 +100,7 @@ def test_create_checkout_session (flask_app, create_client_user, seed_database, 
         assert new_address is not None
 
 
-def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
+def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, seed_database) :
     # create user and get cart item and address
     user, test_uid = create_client_user
     cart_item, address = seed_database
@@ -126,7 +126,7 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
 
     # mock the webhook secret
     with patch.dict(config, {'WEBHOOK_SECRET': 'mock_webhook_secret'}) :
-        with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+        with mock_firebase(test_uid) :
         # mock the stripe event
             with patch('stripe.Webhook.construct_event') as mock_construct_event :
                 # return the mock payload data 
@@ -160,7 +160,7 @@ def test_handle_stripe_webhook (flask_app, create_client_user, seed_database) :
 
             
 @pytest.mark.parametrize('requesting_recents', (True, False))
-def test_order_history (flask_app, create_client_user, seed_database, requesting_recents) :
+def test_order_history (flask_app, create_client_user, mock_firebase, seed_database, requesting_recents) :
     # create user, get access to address
     user, test_uid = create_client_user
     cart_item, address = seed_database
@@ -174,7 +174,7 @@ def test_order_history (flask_app, create_client_user, seed_database, requesting
     # if user is requesting most recent orders, query param of recent=true
     query_params = { 'recent': 'true' } if requesting_recents else {}
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get('/api/order/',
             headers = { 'Authorization': f'Bearer {test_uid}' },
             query_string = query_params,
@@ -194,7 +194,7 @@ def test_order_history (flask_app, create_client_user, seed_database, requesting
 
 
 # show order
-def test_show_order (flask_app, create_client_user) :
+def test_show_order (flask_app, create_client_user, mock_firebase) :
     # create user
     user, test_uid = create_client_user
 
@@ -212,7 +212,7 @@ def test_show_order (flask_app, create_client_user) :
         for item in order.cart_items
     ]
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get(f'/api/order/{order.id}',
             headers = { 'Authorization': f'Bearer {test_uid}' }
         )
@@ -229,7 +229,7 @@ def test_show_order (flask_app, create_client_user) :
     ('in-progress', True, False),
     ('in-progress', False, True),
 ])
-def test_order_fulfillment (flask_app, create_admin_user, status, is_filter, is_search) :
+def test_order_fulfillment (flask_app, create_admin_user, mock_firebase, status, is_filter, is_search) :
     admin, test_uid = create_admin_user
 
     # retrieve an order to search by
@@ -243,7 +243,7 @@ def test_order_fulfillment (flask_app, create_admin_user, status, is_filter, is_
     # format query params for request
     query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value is not None }
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get(f'/api/order/fulfillment/{status}/',
             query_string = query_params,
             headers = { 'Authorization': f'Bearer {test_uid}' }
@@ -286,7 +286,7 @@ def test_order_fulfillment (flask_app, create_admin_user, status, is_filter, is_
     (True, False), # batch input with one or more invalid ids --> 500
     (True, True), # batch input with all valid ids --> 200
 ])
-def test_start_orders (flask_app, create_admin_user, is_batch, is_valid) :
+def test_start_orders (flask_app, create_admin_user, mock_firebase, is_batch, is_valid) :
     admin, test_uid = create_admin_user
 
     if is_batch :
@@ -313,7 +313,7 @@ def test_start_orders (flask_app, create_admin_user, is_batch, is_valid) :
             # if invalid data test case, just create a list of a random invalid number
             id_list = [random.randint(1, 10)]
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/order/fulfillment/set-in-progress/',
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = id_list # passing in list of ids or both single and batch test cases
@@ -352,7 +352,7 @@ def test_start_orders (flask_app, create_admin_user, is_batch, is_valid) :
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, valid_admin, valid_order, valid_status) :
+def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, mock_firebase, valid_admin, valid_order, valid_status) :
     admin, test_uid = create_admin_user
     second_admin, second_uid = create_second_admin_user
 
@@ -377,7 +377,7 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
         order_id = random.randint(1, 10)
 
     
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-pending/',
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )
@@ -413,7 +413,7 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, valid_admin, valid_order, valid_status) :
+def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, mock_firebase, valid_admin, valid_order, valid_status) :
     admin, test_uid = create_admin_user
     second_admin, second_uid = create_second_admin_user
 
@@ -438,7 +438,7 @@ def test_complete_order_fulfillment (flask_app, create_admin_user, create_second
         order_id = random.randint(1, 10)
 
     
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-complete/',
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )

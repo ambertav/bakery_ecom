@@ -1,8 +1,6 @@
 import pytest
 import random
 
-from unittest.mock import patch, MagicMock
-
 from ..database import db
 from ..api.models.models import Cart_Item, Portion, Product, Category
 
@@ -53,7 +51,7 @@ def seed_products (flask_app) :
 
 # creating cart item, scenario: logged in + adding to cart
 @pytest.mark.parametrize('valid_product', [True, False])
-def test_cart_item_creation (flask_app, create_client_user, seed_products, valid_product) :
+def test_cart_item_creation (flask_app, create_client_user, mock_firebase, seed_products, valid_product) :
     # create user and get list of products
     user, test_uid = create_client_user
     products = seed_products
@@ -65,7 +63,7 @@ def test_cart_item_creation (flask_app, create_client_user, seed_products, valid
         # otherwise, initialize id with an invalid id
         id = 0
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.post('/api/cart/add', 
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = { 
@@ -85,7 +83,7 @@ def test_cart_item_creation (flask_app, create_client_user, seed_products, valid
 
 
 # creating cart item, scenario: user has items in cart and then logs in / signs up
-def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_products) :
+def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_firebase, seed_products) :
     # create user and get list of products
     user, test_uid = create_client_user
     products = seed_products
@@ -112,7 +110,7 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
         },
     ]
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.post('/api/user/login', 
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = {
@@ -206,12 +204,12 @@ def test_cart_item_portion_and_price_validation (flask_app, create_client_user, 
         assert error.type is ValueError # assert ValueError
 
 
-def test_view_cart (flask_app, create_client_user) :
+def test_view_cart (flask_app, create_client_user, mock_firebase) :
     # creating user, query for all of user's cart items
     user, test_uid = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get('/api/cart/', 
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )
@@ -231,7 +229,7 @@ def test_view_cart (flask_app, create_client_user) :
     (False, None), # invalid id --> 404
     (True, -1), # valid id, invalid qty --> 500
 ])
-def test_update_cart_item_quantity (flask_app, create_client_user, valid_id, new_qty) :
+def test_update_cart_item_quantity (flask_app, create_client_user, mock_firebase, valid_id, new_qty) :
     # creating user, query for all of user's cart items
     user, test_uid = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
@@ -241,7 +239,7 @@ def test_update_cart_item_quantity (flask_app, create_client_user, valid_id, new
     else :
         item_id = 0
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/cart/{item_id}/update', 
             headers = { 'Authorization': f'Bearer {test_uid}' },
             json = {
@@ -278,7 +276,7 @@ def test_update_cart_item_quantity (flask_app, create_client_user, valid_id, new
     (True), # valid id, cart item exists --> will be deleted
     (False) # invalid id, cart item does not exist --> 404
 ])
-def test_delete_cart_item (flask_app, create_client_user, valid_id) :
+def test_delete_cart_item (flask_app, create_client_user, mock_firebase, valid_id) :
     # creating user, query for all of user's cart items
     user, test_uid = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
@@ -291,7 +289,7 @@ def test_delete_cart_item (flask_app, create_client_user, valid_id) :
     else :
         item_id = 0
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.delete(f'/api/cart/{item_id}/delete', 
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )

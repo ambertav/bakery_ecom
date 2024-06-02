@@ -59,17 +59,15 @@ def test_renew_pin (flask_app, create_admin_user) :
 
 
 # tests for admin controllers
-def test_signup (flask_app) :
-    with patch('firebase_admin.auth.verify_id_token') as mock_verify_id_token :
-        mock_verify_id_token.return_value = { 'uid': 'mock_uid' }
-        input_data = { 
-            'name': 'Test',
-            'pin': 12345,
-        }
-
+def test_signup (flask_app, mock_firebase) :
+    input_data = { 
+        'name': 'Test',
+        'pin': 12345,
+    }
+    with mock_firebase('mock_uid') :
         response = flask_app.post('/api/admin/signup/',
             headers = { 'Authorization': f'Bearer mock_uid' },
-            json = input_data,
+            json = input_data
         )
 
     assert response.status_code in [201, 308]
@@ -87,7 +85,7 @@ def test_signup (flask_app) :
     (True, True, True), # need to update pin
     (False, None, None), # invalid credentials
 ])
-def test_login (flask_app, valid_id, valid_pin, expired_pin) :
+def test_login (flask_app, mock_firebase, valid_id, valid_pin, expired_pin) :
     admin = Admin.query.filter_by(name = 'Test').first()
 
     if valid_id :
@@ -105,9 +103,7 @@ def test_login (flask_app, valid_id, valid_pin, expired_pin) :
     else :
         pin = 00000
 
-    with patch('firebase_admin.auth.verify_id_token') as mock_verify_id_token :
-        mock_verify_id_token.return_value = { 'uid': admin.firebase_uid }
-
+    with mock_firebase(admin.firebase_uid) :
         response = flask_app.post('/api/admin/login/',
             headers = { 'Authorization': f'Bearer {admin.firebase_uid}' },
             json = {
@@ -135,7 +131,7 @@ def test_login (flask_app, valid_id, valid_pin, expired_pin) :
     (False, True), # invalid credentials
     (False, False) # invalid credentials
 ])
-def test_update_pin (flask_app, valid_id, valid_pin) :
+def test_update_pin (flask_app, mock_firebase, valid_id, valid_pin) :
     admin = Admin.query.filter_by(name = 'Test').first()
 
     if valid_id and valid_pin :
@@ -151,9 +147,7 @@ def test_update_pin (flask_app, valid_id, valid_pin) :
         employee_id = 00000000
         old_pin = 00000
 
-    with patch('firebase_admin.auth.verify_id_token') as mock_verify_id_token :
-        mock_verify_id_token.return_value = { 'uid': admin.firebase_uid }
-
+    with mock_firebase(admin.firebase_uid) :
         response = flask_app.post('/api/admin/update-pin/',
             headers = { 'Authorization': f'Bearer {admin.firebase_uid}' }, 
             # need to pass values as str to mimic http request body

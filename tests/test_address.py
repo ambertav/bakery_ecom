@@ -88,7 +88,7 @@ def test_address_validation (flask_app, create_client_user, first_name, last_nam
 
 
 @pytest.mark.parametrize('requesting_default', (True, False))
-def test_get_address (flask_app, create_client_user, seed_addresses, requesting_default) :
+def test_get_address (flask_app, create_client_user, mock_firebase, seed_addresses, requesting_default) :
     # create user and get list of addresses
     user, test_uid = create_client_user
     addresses = seed_addresses
@@ -96,7 +96,7 @@ def test_get_address (flask_app, create_client_user, seed_addresses, requesting_
     # if user requesting default, query param of default=true
     query_params = { 'default': 'true' } if requesting_default else {}
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.get('/api/address/',
             headers = { 'Authorization': f'Bearer {test_uid}' }, 
             query_string = query_params,
@@ -116,7 +116,7 @@ def test_get_address (flask_app, create_client_user, seed_addresses, requesting_
 
 
 @pytest.mark.parametrize('valid_address', [(True), (False)])
-def test_update_default (flask_app, create_client_user, seed_addresses, valid_address) :
+def test_update_default (flask_app, create_client_user, mock_firebase, seed_addresses, valid_address) :
     # create user and get list of addresses
     user, test_uid = create_client_user
     addresses = seed_addresses
@@ -132,7 +132,7 @@ def test_update_default (flask_app, create_client_user, seed_addresses, valid_ad
         # otherwise, initialize id with an invalid id
         address_id = 0
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.put(f'/api/address/default/{address_id}',
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )
@@ -158,7 +158,7 @@ def test_update_default (flask_app, create_client_user, seed_addresses, valid_ad
     (True, False, True), # valid id, not default, used for order --> 400 error, violates not null in order table
     (False, None, None) # invalid id, 404 not found
 ])
-def test_delete_address (flask_app, create_client_user, seed_addresses, valid_id, is_default, used_for_order) :
+def test_delete_address (flask_app, create_client_user, mock_firebase, seed_addresses, valid_id, is_default, used_for_order) :
     # create user and get list of addresses
     user, test_uid = create_client_user
     addresses = seed_addresses
@@ -177,7 +177,7 @@ def test_delete_address (flask_app, create_client_user, seed_addresses, valid_id
     else :
         address_id = 0
 
-    with patch('firebase_admin.auth.verify_id_token', MagicMock(return_value = { 'uid': test_uid })) :
+    with mock_firebase(test_uid) :
         response = flask_app.delete(f'/api/address/{address_id}/delete',
             headers = { 'Authorization': f'Bearer {test_uid}' },
         )
