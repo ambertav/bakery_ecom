@@ -392,6 +392,7 @@ def create_checkout_session() :
             mode = 'payment',
             success_url = 'http://localhost:3000/cart/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url = 'http://localhost:3000/cart',
+            # customer_creaton = 'always',
             metadata = {
                 'cart': str(cart_ids), # pass in string of cart ids for order creation
                 'method': method, # pass in delivery method from delivery form input
@@ -529,7 +530,7 @@ def handle_address (address, user) :
         
         # process the address input so that capitals and extra space are removed
             # use this cleaned up input to query database
-        processed_address = { key: value.strip().lower() for (key, value) in address.items() }
+        processed_address = { key: value.strip().lower() if type(value) is str else value for (key, value) in address.items() }
 
         # search for address
         existing_address = Address.query.filter_by(
