@@ -526,14 +526,19 @@ def create_order (address, user, method) :
     
 def handle_address (address, user) :
     try :
+        
+        # process the address input so that capitals and extra space are removed
+            # use this cleaned up input to query database
+        processed_address = { key: value.strip().lower() for (key, value) in address.items() }
+
         # search for address
         existing_address = Address.query.filter_by(
-            first_name = address['firstName'],
-            last_name = address['lastName'],
-            street = address['street'],
-            city = address['city'],
-            state = address['state'],
-            zip = address['zip'],
+            first_name = processed_address['firstName'],
+            last_name = processed_address['lastName'],
+            street = processed_address['street'],
+            city = processed_address['city'],
+            state = processed_address['state'],
+            zip = processed_address['zip'],
             user_id = user.id,
         ).one_or_none()
 
@@ -544,12 +549,12 @@ def handle_address (address, user) :
         # create address if necessary
         if existing_address is None :
             new_address =  Address(
-                first_name = address['firstName'],
-                last_name = address['lastName'],
-                street = address['street'],
-                city = address['city'],
-                state = address['state'],
-                zip = address['zip'],
+                first_name = processed_address['firstName'],
+                last_name = processed_address['lastName'],
+                street = processed_address['street'],
+                city = processed_address['city'],
+                state = processed_address['state'],
+                zip = processed_address['zip'],
                 user_id = user.id,
                 default = False,
             )
