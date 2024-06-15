@@ -392,7 +392,6 @@ def create_checkout_session() :
             mode = 'payment',
             success_url = 'http://localhost:3000/cart/success?session_id={CHECKOUT_SESSION_ID}',
             cancel_url = 'http://localhost:3000/cart',
-            # customer_creaton = 'always',
             metadata = {
                 'cart': str(cart_ids), # pass in string of cart ids for order creation
                 'method': method, # pass in delivery method from delivery form input
@@ -448,14 +447,9 @@ def handle_stripe_webhook () :
             # create instance of order
             new_order = create_order(address_id, user_id, method)
 
-            user = User.query.filter_by(id = user_id).first()
-
-            # associate stripe's customer id with user in database
-            if user and not user.stripe_customer_id :
-                user.stripe_customer_id = session['customer']
-
             try :
-                # finalize order with payment info from stripe
+                # finalize order with session and payment info from stripe
+                new_order.stripe_session_id = session['id']
                 new_order.stripe_payment_id = session['payment_intent']
                 new_order.payment_status =  Pay_Status.COMPLETED
 
