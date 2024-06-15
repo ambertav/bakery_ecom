@@ -69,15 +69,13 @@ class User (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(30), nullable = False)
     firebase_uid = db.Column(db.String(128), nullable = False)
-    stripe_customer_id = db.Column(db.String(), nullable = True)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
     addresses = db.relationship('Address', backref = 'user', lazy = 'dynamic')
 
-    def __init__ (self, name, firebase_uid, stripe_customer_id, created_at) :
+    def __init__ (self, name, firebase_uid, created_at) :
         self.name = name
         self.firebase_uid = firebase_uid
-        self.stripe_customer_id = stripe_customer_id
         self.created_at = created_at
 
 
@@ -311,6 +309,7 @@ class Order (db.Model) :
     total_price = db.Column(db.Numeric(precision = 10, scale = 2), nullable = False)
     date = db.Column(db.TIMESTAMP(), nullable = False)
     status = db.Column(db.Enum(Order_Status), nullable = False)
+    stripe_session_id = db.Column(db.String, nullable = True)
     stripe_payment_id = db.Column(db.String, nullable = True)
     delivery_method = db.Column(db.Enum(Deliver_Method), nullable = False)
     payment_status = db.Column(db.Enum(Pay_Status), nullable = False)
