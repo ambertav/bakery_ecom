@@ -118,7 +118,6 @@ def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, se
                     'user': str(user.id),
                     'address_id': str(address.id)
                 },
-                'customer': str(user.id),
                 'payment_intent': '123456789'
             },
         }
@@ -135,7 +134,7 @@ def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, se
                 # making request
                 response = flask_app.post('/api/order/stripe-webhook',
                     headers = { 'Authorization': f'Bearer {test_uid}' },
-                    json = json.dumps(mock_payload_data)
+                    json = mock_payload_data
                 )
 
     assert response.status_code == 200
@@ -148,15 +147,12 @@ def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, se
     created_task = Task.query.filter_by(order_id = created_order.id).first()
     assert created_task is not None
 
-    # asserting that order was finalized and address was associated
+    # asserting that order was finalized, address was associated, and stripe session info was saved
     assert created_order.shipping_address_id == address.id
     assert created_order.status == Order_Status.PENDING
     assert created_order.payment_status == Pay_Status.COMPLETED
+    assert created_order.stripe_session_id == mock_payload_data['data']['object']['id']
     unittest.TestCase().assertDictEqual(created_order.cart_items[0].as_dict(), cart_item.as_dict())
-
-    # asserting that user's stripe customer id was updated
-    updated_user = User.query.get(user.id)
-    assert updated_user.stripe_customer_id == mock_payload_data['data']['object']['customer']
 
             
 @pytest.mark.parametrize('requesting_recents', (True, False))

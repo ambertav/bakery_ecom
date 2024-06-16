@@ -110,7 +110,6 @@ def create_client_user () :
     user = User(
         name = 'Client',
         firebase_uid = user_uid,
-        stripe_customer_id = None,
         created_at = datetime.now(timezone.utc)
     )
     db.session.add(user)
@@ -125,7 +124,6 @@ def create_second_client_user () :
     user = User(
         name = 'Client',
         firebase_uid = user_uid,
-        stripe_customer_id = None,
         created_at = datetime.now(timezone.utc)
     )
     db.session.add(user)
