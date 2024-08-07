@@ -386,17 +386,20 @@ class Order (db.Model) :
         self.task.assign_admin(admin_id)
 
     def status_undo (self, admin_id) :
-        if self.status == Order_Status.IN_PROGRESS and self.task.admin_id == admin_id  :
-            self.status = Order_Status.PENDING
-            self.task.unassign_admin()
-        else :
-            if self.status != Order_Status.IN_PROGRESS :
-                raise ValueError('Order status could not be updated')
-            else :
-                raise PermissionError('Requesting admin does not match assigned admin')
+        self.validate_status_update(admin_id)
+        self.status = Order_Status.PENDING
+        self.task.unassign_admin()
 
-    def status_complete (self) :
-        pass
+    def status_complete (self, admin_id) :
+        self.validate_status_update(admin_id)
+        self.status = Order_Status.COMPLETED
+        self.task.complete()
+
+    def validate_status_update (self, admin_id) :
+        if self.status != Order_Status.IN_PROGRESS :
+            raise ValueError('Order status could not be updated')
+        if self.task.admin_id != admin_id:
+            raise PermissionError('Requesting admin does not match assigned admin')
 
     def as_dict (self) :
         return {

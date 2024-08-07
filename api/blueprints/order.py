@@ -245,21 +245,11 @@ def return_order_to_pending (id) :
                     'message': 'Order was successfully returned to pending and admin was unassigned'
                 }), 200
             
-            # 400 code if order status isn't currently IN_PROGRESS
-            # 403 code if unable to match to assigned admin
-            # 500 code else
             except Exception as error :
-                db.session.rollback()
-                status_code = 400 if isinstance(error, ValueError) else 403 if isinstance(error, PermissionError) else 500
-
-                return jsonify({
-                    'error': str(error)
-                }), status_code
+                return handle_status_update_error(error)
 
         else :
-            return jsonify({
-                'error': 'Order not found'
-            }), 404
+            return handle_status_update_error(ValueError('Order not found'))
 
     except Exception as error :
         current_app.logger.error(f'Error returning order to pending status: {str(error)}')
@@ -283,36 +273,19 @@ def complete_order_fulfillment (id) :
         # if found and current status is pending
             # set order to completed
         if order :
-            if order.status == Order_Status.IN_PROGRESS :
-                order.status = Order_Status.COMPLETED
-
-                # query for and verify that requesting admin is assigned to the task
-                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-                if not task :
-                    return jsonify({
-                        'error': 'Forbidden'
-                    }), 403
-
-                # complete task
-                task.complete()
-
+            try :
+                order.status_complete(admin.id)
                 db.session.commit()
 
                 return jsonify({
                     'message': 'Order and associated task were successfully completed'
                 }), 200
-            
-            # 400 code if order status isn't currently IN_PROGRESS
-            else :
-                return jsonify({
-                    'error': 'Order status could not be updated'
-                }), 400
+
+            except Exception as error :
+                return handle_status_update_error(error)
 
         else :
-            return jsonify({
-                'error': 'Order not found'
-            }), 404
-
+            return handle_status_update_error(ValueError('Order not found'))
 
     except Exception as error :
         current_app.logger.error(f'Error completing order and task: {str(error)}')
@@ -522,4 +495,22 @@ def handle_address (address, user) :
         }), 500
 
 
+def handle_status_update_error (error) :
+    # 400 code if order status isn't currently IN_PROGRESS
+    # 403 code if unable to match to assigned admin
+    # 500 code else
 
+    db.session.rollback()
+    error_message = str(error)
+
+    if isinstance(error, ValueError) :
+        status_code = 400
+    elif isinstance(error, PermissionError) :
+        status_code = 403
+    else :
+        status_code = 500
+        error_message = 'Internal server error'
+
+    return jsonify({
+        'error': error_message
+    }), status_code
