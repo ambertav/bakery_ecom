@@ -34,6 +34,12 @@ class Portion (db.Model) :
         CheckConstraint('price >= 0', name = 'non_negative_price'),
     )
 
+    def __init__ (self, product_id, size, stock, price) :
+        self.product_id = product_id
+        self.size = size
+        self.stock = stock
+        self.price = price
+
     def as_dict (self) :
         return {
             'id': self.id,
@@ -239,24 +245,6 @@ class Cart_Item (db.Model) :
             name = 'cart_item_order_association_check'
         ),
     )
-
-    # ensuring that only valid portions are selected based on product's category
-    
-    @validates('portion')
-    def validate_portion (self, key, portion) :
-        product = Product.query.get(self.product_id)
-
-        if product.category in [Category.PASTRY, Category.COOKIE] :
-            if portion is not Portion.WHOLE :
-                raise ValueError('Only the whole portion is available for pastries and cookies')
-        elif product.category in [Category.CUPCAKE, Category.DONUT] :
-            if portion not in [Portion.WHOLE, Portion.MINI] :
-                raise ValueError('Only the whole and mini portions are available for cupcakes and donuts')
-        elif product.category in [Category.CAKE, Category.PIE] :
-            if portion not in [Portion.SLICE, Portion.WHOLE, Portion.MINI] :
-                raise ValueError('Invalid portion selection')
-        return portion
-
 
     # define relationships
     user = db.relationship('User', backref = 'cart_items')
