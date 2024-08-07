@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
 import random
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal, ROUND_DOWN, ROUND_CEILING
 import bcrypt
 
 from ...database import db
@@ -34,11 +34,28 @@ class Portion (db.Model) :
         CheckConstraint('price >= 0', name = 'non_negative_price'),
     )
 
+    product = db.relationship('Product', back_populates = 'portions')
+
     def __init__ (self, product_id, size, stock, price) :
         self.product_id = product_id
         self.size = size
         self.stock = stock
-        self.price = price
+
+        self._calculate_price(price)
+
+    def _calculate_price (self, price) :
+        size_multipliers = {
+            Portion_Size.WHOLE: Decimal('1'),
+            Portion_Size.MINI: Decimal('0.5'),
+            Portion_Size.SLICE: Decimal('0.15')
+        }
+
+        multiplier = size_multipliers.get(self.size, Decimal('1'))
+
+        # price per portion
+            # multiple product price by multiplier and round down
+                # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
+        self.price = Decimal(Decimal(price) * multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
 
     def as_dict (self) :
         return {
@@ -77,8 +94,19 @@ class Product (db.Model) :
     def __init__ (self, name, description, category, image) :
         self.name = name
         self.description = description
-        self.category = category
+        self.category = Category(category)
         self.image = image or 'https://example.com/default_image.jpg'
+
+    def create_portions (self, price) :
+        portions = [Portion_Size.WHOLE]
+
+        if self.category in [Category.CAKE, Category.PIE] :
+            portions.extend([Portion_Size.MINI, Portion_Size.SLICE])
+        elif self.category in [Category.CUPCAKE, Category.DONUT] :
+            portions.append(Portion_Size.MINI)
+        
+        return [ Portion(product_id = self.id, size = size, stock = 0, price = price) for size in portions ]
+
 
     def update_attributes (self, data) :
         for key, value in data.items() :
@@ -261,7 +289,7 @@ class Cart_Item (db.Model) :
         self.ordered = ordered
         self.order_id = order_id
 
-        self.calculate_price()
+        self._calculate_price()
     
 
     def _validate_product_and_portion (self, product_id, portion_id) :
@@ -279,7 +307,7 @@ class Cart_Item (db.Model) :
         return product, portion
     
     # calculating price of item based on quantity and portion
-    def calculate_price (self) :
+    def _calculate_price (self) :
         total_price = Decimal(self.portion.price) * Decimal(self.quantity)
         self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
     
@@ -291,7 +319,7 @@ class Cart_Item (db.Model) :
             return 'delete'
         else :
             self.quantity = new_quantity
-            self.calculate_price()
+            self._calculate_price()
             
 
     def as_dict (self) :
