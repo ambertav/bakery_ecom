@@ -374,7 +374,11 @@ class Order (db.Model) :
         except SQLAlchemyError as error :
             db.session.rollback()
             raise error
-
+        
+    def finalize_order_payment (self, session_id, payment_id) :
+        self.stripe_session_id = session_id
+        self.stripe_payment_id = payment_id
+        self.payment_status =  Pay_Status.COMPLETED
 
     def start (self) :
         pass

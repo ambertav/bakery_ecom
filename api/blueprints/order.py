@@ -438,10 +438,7 @@ def handle_stripe_webhook () :
 
             try :
                 # finalize order with session and payment info from stripe
-                new_order.stripe_session_id = session['id']
-                new_order.stripe_payment_id = session['payment_intent']
-                new_order.payment_status =  Pay_Status.COMPLETED
-
+                new_order.finalize_order_payment(session['id'], session['payment_intent'])
                 db.session.commit()
 
             except Exception as error :
@@ -477,12 +474,12 @@ def create_order (address, user, method) :
 
         db.session.add(new_order)
 
-        new_order.associate_items(items_to_associate)
-        new_order.create_associated_task()
-
         # commit and refresh to get access to new_order.id
         db.session.commit()
         db.session.refresh(new_order)
+
+        new_order.associate_items(items_to_associate)
+        new_order.create_associated_task()
 
         return new_order
         
