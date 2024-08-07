@@ -73,13 +73,8 @@ def show_order (id) :
         order = Order.query.filter_by(id = id, user_id = user.id).first()
 
         if order :
-            order_detail = order.as_dict()
-            cart_items = order.cart_items
-            cart_item_details = [item.as_dict() for item in cart_items]
-            order_detail['items'] = cart_item_details
-
             return jsonify({
-                'order': order_detail
+                'order': order.as_dict()
             }), 200
         else :
             return jsonify({
@@ -127,9 +122,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             order = Order.query.filter_by(id = search).first()
             if order :
                 # format order and corresponding cart_items
-                order_data = [
-                    { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
-                ]
+                order_data = [ { **order.as_dict() } ]
 
                 return jsonify({
                     'orders': order_data, 
@@ -167,11 +160,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             if orders.items :
                 # formats orders and corresponding cart_items and tasks
                 order_history = [
-                    { 
-                        **order.as_dict(), 
-                        'items': [ item.as_dict() for item in order.cart_items ],
-                        'task': order.task.as_dict() if order.task else None 
-                    }
+                    {  **order.as_dict(), 'task': order.task.as_dict() if order.task else None }
                     for order in orders.items
                 ]
 
@@ -203,26 +192,18 @@ def start_orders_and_assign_admin_tasks () :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        
-        data = request.get_json()
 
         try :
-            # start a nested transaction
-            with db.session.begin_nested() :
-                # extract the order ids
-                for order_id in data :
-                    # convert id to int, retrieve orders
-                    order = Order.query.get(int(order_id))
-                    if order :
-                        # set order status to in progress
-                        order.status = Order_Status.IN_PROGRESS
-                        # query for task and assign admin
-                        task = Task.query.filter_by(order_id = order.id).first()
-                        task.assign_admin(admin.id)
-                    else :
-                        raise ValueError(f'Order with id {order_id} was not found')
+            # extract the order ids
+            for order_id in request.get_json() :
+                # convert id to int, retrieve orders
+                order = Order.query.get(int(order_id))
+                if order :
+                    order.status_start(admin.id)
+                else :
+                    raise ValueError(f'Order with id {order_id} was not found')
 
-            # commit nested transaction
+            # commit the transaction
             db.session.commit()
 
         except Exception as error :
@@ -256,35 +237,19 @@ def return_order_to_pending (id) :
         # if found and current status is pending
             # return order to pending
         if order :
-            if order.status == Order_Status.IN_PROGRESS :
-                order.status = Order_Status.PENDING
-
-                # query for and verify that requesting admin is assigned to the task
-                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-                if not task :
-                    return jsonify({
-                        'error': 'Forbidden'
-                    }), 403
-
-                # unassign admin from task
-                task.unassign_admin()
-
+            try :
+                order.status_undo(admin.id)
                 db.session.commit()
 
                 return jsonify({
                     'message': 'Order was successfully returned to pending and admin was unassigned'
                 }), 200
             
-            # 400 code if order status isn't currently IN_PROGRESS
-            else :
-                return jsonify({
-                    'error': 'Order status could not be updated'
-                }), 400
+            except Exception as error :
+                return handle_status_update_error(error)
 
         else :
-            return jsonify({
-                'error': 'Order not found'
-            }), 404
+            return handle_status_update_error(ValueError('Order not found'))
 
     except Exception as error :
         current_app.logger.error(f'Error returning order to pending status: {str(error)}')
@@ -308,36 +273,19 @@ def complete_order_fulfillment (id) :
         # if found and current status is pending
             # set order to completed
         if order :
-            if order.status == Order_Status.IN_PROGRESS :
-                order.status = Order_Status.COMPLETED
-
-                # query for and verify that requesting admin is assigned to the task
-                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-                if not task :
-                    return jsonify({
-                        'error': 'Forbidden'
-                    }), 403
-
-                # complete task
-                task.complete()
-
+            try :
+                order.status_complete(admin.id)
                 db.session.commit()
 
                 return jsonify({
                     'message': 'Order and associated task were successfully completed'
                 }), 200
-            
-            # 400 code if order status isn't currently IN_PROGRESS
-            else :
-                return jsonify({
-                    'error': 'Order status could not be updated'
-                }), 400
+
+            except Exception as error :
+                return handle_status_update_error(error)
 
         else :
-            return jsonify({
-                'error': 'Order not found'
-            }), 404
-
+            return handle_status_update_error(ValueError('Order not found'))
 
     except Exception as error :
         current_app.logger.error(f'Error completing order and task: {str(error)}')
@@ -449,10 +397,7 @@ def handle_stripe_webhook () :
 
             try :
                 # finalize order with session and payment info from stripe
-                new_order.stripe_session_id = session['id']
-                new_order.stripe_payment_id = session['payment_intent']
-                new_order.payment_status =  Pay_Status.COMPLETED
-
+                new_order.finalize_order_payment(session['id'], session['payment_intent'])
                 db.session.commit()
 
             except Exception as error :
@@ -492,23 +437,7 @@ def create_order (address, user, method) :
         db.session.commit()
         db.session.refresh(new_order)
 
-        # loop through items and update ordered boolean, associate to new order
-        for item in items_to_associate :
-            item.ordered = True
-            item.order_id = new_order.id
-
-            if item.portion == Portion.SLICE :
-                # if portion is slice, deduct by 1/8, or 0.125, * quantity of slices
-                item.product.stock -= Decimal(0.125) * Decimal(item.quantity)
-            elif item.portion == Portion.MINI :
-                # if portion is mini, deduct by 1/2, or 0.5, * quantity of minis
-                item.product.stock -= Decimal(0.5) * Decimal(item.quantity)
-            else :
-                item.product.stock -= Decimal(item.quantity)
-
-        db.session.commit()
-
-        # use class method to create and associate task for new order
+        new_order.associate_items(items_to_associate)
         new_order.create_associated_task()
 
         return new_order
@@ -566,4 +495,22 @@ def handle_address (address, user) :
         }), 500
 
 
+def handle_status_update_error (error) :
+    # 400 code if order status isn't currently IN_PROGRESS
+    # 403 code if unable to match to assigned admin
+    # 500 code else
 
+    db.session.rollback()
+    error_message = str(error)
+
+    if isinstance(error, ValueError) :
+        status_code = 400
+    elif isinstance(error, PermissionError) :
+        status_code = 403
+    else :
+        status_code = 500
+        error_message = 'Internal server error'
+
+    return jsonify({
+        'error': error_message
+    }), status_code

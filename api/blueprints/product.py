@@ -126,17 +126,11 @@ def product_update (id) :
                 'error': 'Authentication failed'
             }), 401
         
-
         product = Product.query.get(id)
 
         if product :
-            data = request.get_json()
-            for key, value in data.items() :
-                if hasattr(product, key) and getattr(product, key) != value :
-                    setattr(product, key, value)
+            product.update_attributes(request.get_json())
             db.session.commit()
-
-            db.session.refresh(product)
 
             return jsonify({
                 'product': product.as_dict(),
@@ -174,7 +168,7 @@ def product_upload_photo (id) :
         image_url = s3_photo_upload(file, str(product.id))
 
         if image_url :
-            product.image = image_url
+            product.update_attributes({'image': image_url})
             db.session.commit()
 
             return jsonify({
@@ -202,24 +196,23 @@ def product_update_inventory () :
         data = request.get_json()
 
         try :
-            # start a nested transaction
-            with db.session.begin_nested() :
-                # loop over data, and extract the product id key and stock value
-                for product_id, new_stock in data.items() :
-                    # convert id to int, and retrieve product
-                    product = Product.query.get(int(product_id))
-                    if product :
-                        # convert value to int, and set new stock
-                        product.stock = int(new_stock)
-                    else :
-                        raise ValueError(f'Product with id {product_id} was not found')
-
-            # commit nested transaction
+            # loop over data, and extract the product id key and stock value
+            for product_id, new_stock in data.items() :
+                # convert id to int, and retrieve product
+                product = Product.query.get(int(product_id))
+                if product :
+                    # convert value to int, and set new stock
+                    product.update_attributes({'stock': int(new_stock)})
+                else :
+                    raise ValueError(f'Product with id {product_id} was not found')
+            
+            # commit the transaction
             db.session.commit()
 
         except Exception as error :
             db.session.rollback()  # rollback transaction if error
             raise 
+
 
         return jsonify({
             'message': 'Inventory updated successfully'

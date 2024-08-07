@@ -49,6 +49,12 @@ class Product (db.Model) :
         self.image = image or 'https://example.com/default_image.jpg'
         self.price = float(price)
         self.stock = float(stock)
+
+    def update_attributes (self, data) :
+        for key, value in data.items() :
+            if hasattr(self, key) and getattr(self, key) != value :
+                setattr(self, key, value)
+    
     
     def as_dict (self) : 
         return {
@@ -172,6 +178,9 @@ class Address (db.Model) :
         self.default = default
         self.user_id = user_id
 
+    def toggle_default (self) :
+        self.default = not self.default
+
     def as_dict (self) :
         return {
             'id': self.id,
@@ -249,6 +258,15 @@ class Cart_Item (db.Model) :
             raise ValueError(f'Product does not exist')
         
         self.calculate_price()
+    
+    def update_quantity (self, new_quantity) :
+        if new_quantity < 0 or new_quantity == None :
+            raise ValueError('Invalid quantity provided')
+        elif new_quantity == 0 :
+            return 'delete'
+        else :
+            self.quantity = new_quantity
+            
 
     # calculating price of item based on quantity and portion
     def calculate_price (self) :
@@ -333,6 +351,13 @@ class Order (db.Model) :
         self.payment_status = payment_status
         self.shipping_address_id = shipping_address_id
 
+
+    def associate_items (self, cart_items) :
+        for item in cart_items :
+            item.order_id = self.id
+            item.ordered = True
+            self.cart_items.append(item)
+
     # method to create basic task associated to order instance
     def create_associated_task (self) :
         try :
@@ -344,17 +369,44 @@ class Order (db.Model) :
             )
             db.session.add(task)
             db.session.commit()
+
             return task
+        
         except SQLAlchemyError as error :
             db.session.rollback()
             raise error
+        
+    def finalize_order_payment (self, session_id, payment_id) :
+        self.stripe_session_id = session_id
+        self.stripe_payment_id = payment_id
+        self.payment_status =  Pay_Status.COMPLETED
 
+    def status_start (self, admin_id) :
+        self.status = Order_Status.IN_PROGRESS
+        self.task.assign_admin(admin_id)
+
+    def status_undo (self, admin_id) :
+        self.validate_status_update(admin_id)
+        self.status = Order_Status.PENDING
+        self.task.unassign_admin()
+
+    def status_complete (self, admin_id) :
+        self.validate_status_update(admin_id)
+        self.status = Order_Status.COMPLETED
+        self.task.complete()
+
+    def validate_status_update (self, admin_id) :
+        if self.status != Order_Status.IN_PROGRESS :
+            raise ValueError('Order status could not be updated')
+        if self.task.admin_id != admin_id:
+            raise PermissionError('Requesting admin does not match assigned admin')
 
     def as_dict (self) :
         return {
             'id': self.id,
             'totalPrice': self.total_price,
             'date': self.date.strftime('%m/%d/%Y %I:%M %p'),
+            'cartItems': [ item.as_dict() for item in self.cart_items ],
             'status': serialize_enum(self.status),
             'deliveryMethod': serialize_enum(self.delivery_method), 
             'paymentStatus': serialize_enum(self.payment_status),

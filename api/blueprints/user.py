@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 from firebase_admin import auth
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 from ...database import db
@@ -28,8 +28,7 @@ def signup () :
         user_data = {
             'name': request.json.get('name'),
             'firebase_uid': uid,
-            'stripe_customer_id': None,
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         }
 
         new_user = User(**user_data)
