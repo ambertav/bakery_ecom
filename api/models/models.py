@@ -14,6 +14,34 @@ from ...database import db
 def serialize_enum (enum_value) :
     return enum_value.value.lower()
 
+# enum for portions
+class Portion_Size (Enum) :
+    SLICE = 'SLICE'
+    WHOLE = 'WHOLE'
+    MINI = 'MINI'
+
+class Portion (db.Model) :
+    __tablename__ = 'portions'
+
+    id = db.Column(db.Integer, primary_key = True)
+    product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
+    size = db.Column(db.Enum(Portion_Size), nullable = False)
+    stock = db.Column(db.Integer, nullable = False)
+    price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
+
+    __table_args__ = (
+        CheckConstraint('stock >= 0', name = 'non_negative_stock'),
+        CheckConstraint('price >= 0', name = 'non_negative_price'),
+    )
+
+    def as_dict (self) :
+        return {
+            'id': self.id,
+            'size': serialize_enum(self.size),
+            'stock': self.stock,
+            'price': float(self.price)
+        }
+
 
 # enum for product category
 class Category (Enum) :
@@ -33,22 +61,18 @@ class Product (db.Model) :
     description = db.Column(db.String(500), nullable = False)
     category = db.Column(db.Enum(Category), nullable = False)
     image = db.Column(db.String(), nullable = False, default = 'https://example.com/default_image.jpg')
-    price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
-    stock = db.Column(db.Numeric(precision = 10, scale = 3), nullable = False)
 
     __table_args__ = (
-        CheckConstraint('stock >= 0', name = 'non_negative_stock'),
-        CheckConstraint('price >= 0', name = 'non_negative_price'),
         CheckConstraint("image ~* '^https?://.*\.(png|jpg|jpeg|gif)$'", name = 'valid_image_url'),
     )
 
-    def __init__ (self, name, description, category, image, price, stock) :
+    portions = db.relationship('Portion', back_populates = 'product', cascade = 'all, delete-orphan')
+
+    def __init__ (self, name, description, category, image) :
         self.name = name
         self.description = description
         self.category = category
         self.image = image or 'https://example.com/default_image.jpg'
-        self.price = float(price)
-        self.stock = float(stock)
 
     def update_attributes (self, data) :
         for key, value in data.items() :
@@ -63,8 +87,7 @@ class Product (db.Model) :
             'description': self.description,
             'category': serialize_enum(self.category),
             'image': self.image,
-            'price': self.price,
-            'stock': self.stock
+            'portions': [ portion.as_dict() for portion in self.portions ]
         }
 
 
@@ -193,13 +216,6 @@ class Address (db.Model) :
             'default': self.default
         }
 
-
-# enum for cart item portions
-class Portion (Enum) :
-    SLICE = 'SLICE'
-    WHOLE = 'WHOLE'
-    MINI = 'MINI'
-
 # Cart_item
 class Cart_Item (db.Model) :
     __tablename__ = 'cart_items'
@@ -225,6 +241,7 @@ class Cart_Item (db.Model) :
     )
 
     # ensuring that only valid portions are selected based on product's category
+    
     @validates('portion')
     def validate_portion (self, key, portion) :
         product = Product.query.get(self.product_id)
