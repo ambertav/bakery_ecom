@@ -373,6 +373,7 @@ class Order (db.Model) :
             'id': self.id,
             'totalPrice': self.total_price,
             'date': self.date.strftime('%m/%d/%Y %I:%M %p'),
+            'cartItems': [ item.as_dict() for item in self.cart_items ],
             'status': serialize_enum(self.status),
             'deliveryMethod': serialize_enum(self.delivery_method), 
             'paymentStatus': serialize_enum(self.payment_status),

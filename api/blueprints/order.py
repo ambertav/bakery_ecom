@@ -73,13 +73,8 @@ def show_order (id) :
         order = Order.query.filter_by(id = id, user_id = user.id).first()
 
         if order :
-            order_detail = order.as_dict()
-            cart_items = order.cart_items
-            cart_item_details = [item.as_dict() for item in cart_items]
-            order_detail['items'] = cart_item_details
-
             return jsonify({
-                'order': order_detail
+                'order': order.as_dict()
             }), 200
         else :
             return jsonify({
@@ -128,7 +123,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             if order :
                 # format order and corresponding cart_items
                 order_data = [
-                    { **order.as_dict(), 'items': [ item.as_dict() for item in order.cart_items ] }
+                    { **order.as_dict() }
                 ]
 
                 return jsonify({
@@ -169,7 +164,6 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
                 order_history = [
                     { 
                         **order.as_dict(), 
-                        'items': [ item.as_dict() for item in order.cart_items ],
                         'task': order.task.as_dict() if order.task else None 
                     }
                     for order in orders.items
