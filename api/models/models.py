@@ -135,12 +135,12 @@ class Admin (db.Model) :
         self.created_at = created_at
 
         # generate unique employee id
-        self.employee_id = self.generate_unique_employee_id()
+        self.employee_id = self._generate_unique_employee_id()
 
         # setting initial pin expiration to 30 days after creation
         self.pin_expiration = self.created_at + timedelta(days = 30)
 
-    def generate_unique_employee_id (self) :
+    def _generate_unique_employee_id (self) :
         # generating random 8 digit number
         id = random.randint(10000000, 99999999)
         
@@ -249,33 +249,50 @@ class Cart_Item (db.Model) :
     # define relationships
     user = db.relationship('User', backref = 'cart_items')
     product = db.relationship('Product', backref = 'cart_items')
+    portion = db.relationship('Portion')
 
     def __init__ (self, user_id, product_id, portion_id, quantity, ordered, order_id) :
+        self.product, self.portion = self._validate_product_and_portion(product_id, portion_id)
+
         self.user_id = user_id
         self.product_id = product_id
-        self.portion = portion_id
+        self.portion_id = portion_id
         self.quantity = quantity
         self.ordered = ordered
         self.order_id = order_id
 
-        self.product = Product.query.filter_by(id = product_id).first()
-        if self.product is None :
-            raise ValueError(f'Product does not exist')
-        
         self.calculate_price()
     
+
+    def _validate_product_and_portion (self, product_id, portion_id) :
+        product = Product.query.filter_by(id = product_id).first()
+        if product is None :
+            raise ValueError('Product does not exist')
+        
+        portion = Portion.query.filter_by(id = portion_id).first()
+        if portion is None :
+            raise ValueError('Portion does not exist')
+        
+        if portion.product_id != product_id :
+            raise ValueError('The portion does not correspond to selected product')
+    
+        return product, portion
+    
+    # calculating price of item based on quantity and portion
+    def calculate_price (self) :
+        total_price = Decimal(self.portion.price) * Decimal(self.quantity)
+        self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
+    
+
     def update_quantity (self, new_quantity) :
         if new_quantity < 0 or new_quantity == None :
             raise ValueError('Invalid quantity provided')
         elif new_quantity == 0 :
             return 'delete'
         else :
-            self.quantity = new_quantity  
-
-    # calculating price of item based on quantity and portion
-    def calculate_price (self) :
-        total_price = Decimal(self.portion.price) * Decimal(self.quantity)
-        self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
+            self.quantity = new_quantity
+            self.calculate_price()
+            
 
     def as_dict (self) :
         return {
@@ -288,7 +305,7 @@ class Cart_Item (db.Model) :
             'price': float(self.price),
             'portion': {
                 'id': self.portion.id,
-                'size': serialize_enum(self.portion.size), 
+                'size': serialize_enum(self.portion.size),
                 'price': float(self.portion.price)
             },
             'quantity': self.quantity,
@@ -383,16 +400,16 @@ class Order (db.Model) :
         self.task.assign_admin(admin_id)
 
     def status_undo (self, admin_id) :
-        self.validate_status_update(admin_id)
+        self._validate_status_update(admin_id)
         self.status = Order_Status.PENDING
         self.task.unassign_admin()
 
     def status_complete (self, admin_id) :
-        self.validate_status_update(admin_id)
+        self._validate_status_update(admin_id)
         self.status = Order_Status.COMPLETED
         self.task.complete()
 
-    def validate_status_update (self, admin_id) :
+    def _validate_status_update (self, admin_id) :
         if self.status != Order_Status.IN_PROGRESS :
             raise ValueError('Order status could not be updated')
         if self.task.admin_id != admin_id:
