@@ -255,6 +255,15 @@ class Cart_Item (db.Model) :
             raise ValueError(f'Product does not exist')
         
         self.calculate_price()
+    
+    def update_quantity (self, new_quantity) :
+        if new_quantity < 0 or new_quantity == None :
+            raise ValueError('Invalid quantity provided')
+        elif new_quantity == 0 :
+            return 'delete'
+        else :
+            self.quantity = new_quantity
+            
 
     # calculating price of item based on quantity and portion
     def calculate_price (self) :

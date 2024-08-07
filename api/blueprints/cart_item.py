@@ -79,7 +79,6 @@ def update_quantity (id) :
             }), 401
         
         data = request.get_json()
-        new_quantity = data['newQty']
 
         cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
         
@@ -87,23 +86,22 @@ def update_quantity (id) :
             return jsonify({
                 'error': 'Item not found in cart'
             }), 404
-        else :
-            if new_quantity < 0 :
-                raise ValueError('Invalid quantity provided')
-            elif new_quantity == 0 :
+        
+        try :
+            result = cart_item.update_quantity(data.get('newQty'))
+            if result == 'delete' :
                 db.session.delete(cart_item)
-            else :
-                cart_item.quantity = new_quantity
 
             db.session.commit()
+
             return jsonify({
                 'message': 'Item quantity updated successfully'
             }), 200
             
-    except ValueError :
+        except ValueError as ve :
             db.session.rollback()
             return jsonify({
-                'error': 'Invalid quantity provided'
+                'error': str(ve)
             }), 400
     
     except Exception as error :
@@ -158,9 +156,19 @@ def create_item (data, user) :
         existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], ordered = False).first()
 
         if existing_item :
-            # update quantity of existing item instead of creating new cart item
-            existing_item.quantity += data.get('qty') 
-            success = True
+            try :
+                qty = int(data.get('qty'))
+                # update quantity of existing item instead of creating new cart item
+                result = existing_item.update_quantity(existing_item.quantity + qty) 
+                if result == 'delete' :
+                    db.session.delete(existing_item)
+
+                success = True
+            except ValueError :
+                return {
+                    'success': False,
+                    'message': 'Invalid quantity format'
+                }
         else :
             # otherwise, create item with product id and inputted quantity and portion
             new_item = Cart_Item(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], quantity = data.get('qty'), ordered = False, order_id = None)
