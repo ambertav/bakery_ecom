@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
 import random
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_CEILING
 import bcrypt
 
 from ...database import db
@@ -229,7 +229,7 @@ class Cart_Item (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable = False)
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
-    portion = db.Column(db.Enum(Portion), nullable = False)
+    portion_id = db.Column(db.Integer, ForeignKey('portions.id'), nullable = False)
     quantity = db.Column(db.Integer(), nullable = False)
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
     ordered = db.Column(db.Boolean(), default = False, nullable = False)
@@ -250,10 +250,10 @@ class Cart_Item (db.Model) :
     user = db.relationship('User', backref = 'cart_items')
     product = db.relationship('Product', backref = 'cart_items')
 
-    def __init__ (self, user_id, product_id, portion, quantity, ordered, order_id) :
+    def __init__ (self, user_id, product_id, portion_id, quantity, ordered, order_id) :
         self.user_id = user_id
         self.product_id = product_id
-        self.portion = portion
+        self.portion = portion_id
         self.quantity = quantity
         self.ordered = ordered
         self.order_id = order_id
@@ -270,35 +270,27 @@ class Cart_Item (db.Model) :
         elif new_quantity == 0 :
             return 'delete'
         else :
-            self.quantity = new_quantity
-            
+            self.quantity = new_quantity  
 
     # calculating price of item based on quantity and portion
     def calculate_price (self) :
-        if self.portion == Portion.WHOLE:
-            portion_multiplier = Decimal('1')
-        elif self.portion == Portion.MINI:
-            portion_multiplier = Decimal('0.5')
-        elif self.portion == Portion.SLICE:
-            portion_multiplier = Decimal('0.15')
-
-        # price per item
-            # multiple product price by multiplier and round down
-                # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
-        total_price = Decimal(self.product.price * portion_multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
-
-            # replace the last digit with 9 to normalize prices to x.x9 format
-                # particularly for slice options
-        self.price = total_price - (total_price % Decimal('0.10')) + Decimal('0.09')
+        total_price = Decimal(self.portion.price) * Decimal(self.quantity)
+        self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
 
     def as_dict (self) :
         return {
             'id': self.id,
-            'productId': self.product.id,
-            'name': self.product.name,
-            'image': self.product.image,
-            'price': self.price,
-            'portion': serialize_enum(self.portion),
+            'product': {
+                'id': self.product.id,
+                'name': self.product.name,
+                'image': self.product.image
+            },
+            'price': float(self.price),
+            'portion': {
+                'id': self.portion.id,
+                'size': serialize_enum(self.portion.size), 
+                'price': float(self.portion.price)
+            },
             'quantity': self.quantity,
             'orderId': self.order_id
         }
