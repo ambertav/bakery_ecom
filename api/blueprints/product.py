@@ -168,7 +168,7 @@ def product_upload_photo (id) :
         image_url = s3_photo_upload(file, str(product.id))
 
         if image_url :
-            product.image = image_url
+            product.update_attributes({'image': image_url})
             db.session.commit()
 
             return jsonify({
