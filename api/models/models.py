@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
 import random
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_CEILING
 import bcrypt
 
 from ...database import db
@@ -13,6 +13,57 @@ from ...database import db
 
 def serialize_enum (enum_value) :
     return enum_value.value.lower()
+
+# enum for portions
+class Portion_Size (Enum) :
+    SLICE = 'SLICE'
+    WHOLE = 'WHOLE'
+    MINI = 'MINI'
+
+class Portion (db.Model) :
+    __tablename__ = 'portions'
+
+    id = db.Column(db.Integer, primary_key = True)
+    product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
+    size = db.Column(db.Enum(Portion_Size), nullable = False)
+    stock = db.Column(db.Integer, nullable = False)
+    price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
+
+    __table_args__ = (
+        CheckConstraint('stock >= 0', name = 'non_negative_stock'),
+        CheckConstraint('price >= 0', name = 'non_negative_price'),
+    )
+
+    product = db.relationship('Product', back_populates = 'portions')
+
+    def __init__ (self, product_id, size, stock, price) :
+        self.product_id = product_id
+        self.size = size
+        self.stock = stock
+
+        self._calculate_price(price)
+
+    def _calculate_price (self, price) :
+        size_multipliers = {
+            Portion_Size.WHOLE: Decimal('1'),
+            Portion_Size.MINI: Decimal('0.5'),
+            Portion_Size.SLICE: Decimal('0.15')
+        }
+
+        multiplier = size_multipliers.get(self.size, Decimal('1'))
+
+        # price per portion
+            # multiple product price by multiplier and round down
+                # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
+        self.price = Decimal(Decimal(price) * multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
+
+    def as_dict (self) :
+        return {
+            'id': self.id,
+            'size': serialize_enum(self.size),
+            'stock': self.stock,
+            'price': float(self.price)
+        }
 
 
 # enum for product category
@@ -33,22 +84,29 @@ class Product (db.Model) :
     description = db.Column(db.String(500), nullable = False)
     category = db.Column(db.Enum(Category), nullable = False)
     image = db.Column(db.String(), nullable = False, default = 'https://example.com/default_image.jpg')
-    price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
-    stock = db.Column(db.Numeric(precision = 10, scale = 3), nullable = False)
 
     __table_args__ = (
-        CheckConstraint('stock >= 0', name = 'non_negative_stock'),
-        CheckConstraint('price >= 0', name = 'non_negative_price'),
         CheckConstraint("image ~* '^https?://.*\.(png|jpg|jpeg|gif)$'", name = 'valid_image_url'),
     )
 
-    def __init__ (self, name, description, category, image, price, stock) :
+    portions = db.relationship('Portion', back_populates = 'product', cascade = 'all, delete-orphan')
+
+    def __init__ (self, name, description, category, image) :
         self.name = name
         self.description = description
-        self.category = category
+        self.category = Category(category)
         self.image = image or 'https://example.com/default_image.jpg'
-        self.price = float(price)
-        self.stock = float(stock)
+
+    def create_portions (self, price) :
+        portions = [Portion_Size.WHOLE]
+
+        if self.category in [Category.CAKE, Category.PIE] :
+            portions.extend([Portion_Size.MINI, Portion_Size.SLICE])
+        elif self.category in [Category.CUPCAKE, Category.DONUT] :
+            portions.append(Portion_Size.MINI)
+        
+        return [ Portion(product_id = self.id, size = size, stock = 0, price = price) for size in portions ]
+
 
     def update_attributes (self, data) :
         for key, value in data.items() :
@@ -63,8 +121,7 @@ class Product (db.Model) :
             'description': self.description,
             'category': serialize_enum(self.category),
             'image': self.image,
-            'price': self.price,
-            'stock': self.stock
+            'portions': [ portion.as_dict() for portion in self.portions ]
         }
 
 
@@ -106,12 +163,12 @@ class Admin (db.Model) :
         self.created_at = created_at
 
         # generate unique employee id
-        self.employee_id = self.generate_unique_employee_id()
+        self.employee_id = self._generate_unique_employee_id()
 
         # setting initial pin expiration to 30 days after creation
         self.pin_expiration = self.created_at + timedelta(days = 30)
 
-    def generate_unique_employee_id (self) :
+    def _generate_unique_employee_id (self) :
         # generating random 8 digit number
         id = random.randint(10000000, 99999999)
         
@@ -193,13 +250,6 @@ class Address (db.Model) :
             'default': self.default
         }
 
-
-# enum for cart item portions
-class Portion (Enum) :
-    SLICE = 'SLICE'
-    WHOLE = 'WHOLE'
-    MINI = 'MINI'
-
 # Cart_item
 class Cart_Item (db.Model) :
     __tablename__ = 'cart_items'
@@ -207,7 +257,7 @@ class Cart_Item (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     user_id = db.Column(db.Integer, ForeignKey('users.id'), nullable = False)
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
-    portion = db.Column(db.Enum(Portion), nullable = False)
+    portion_id = db.Column(db.Integer, ForeignKey('portions.id'), nullable = False)
     quantity = db.Column(db.Integer(), nullable = False)
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
     ordered = db.Column(db.Boolean(), default = False, nullable = False)
@@ -224,41 +274,44 @@ class Cart_Item (db.Model) :
         ),
     )
 
-    # ensuring that only valid portions are selected based on product's category
-    @validates('portion')
-    def validate_portion (self, key, portion) :
-        product = Product.query.get(self.product_id)
-
-        if product.category in [Category.PASTRY, Category.COOKIE] :
-            if portion is not Portion.WHOLE :
-                raise ValueError('Only the whole portion is available for pastries and cookies')
-        elif product.category in [Category.CUPCAKE, Category.DONUT] :
-            if portion not in [Portion.WHOLE, Portion.MINI] :
-                raise ValueError('Only the whole and mini portions are available for cupcakes and donuts')
-        elif product.category in [Category.CAKE, Category.PIE] :
-            if portion not in [Portion.SLICE, Portion.WHOLE, Portion.MINI] :
-                raise ValueError('Invalid portion selection')
-        return portion
-
-
     # define relationships
     user = db.relationship('User', backref = 'cart_items')
     product = db.relationship('Product', backref = 'cart_items')
+    portion = db.relationship('Portion')
 
-    def __init__ (self, user_id, product_id, portion, quantity, ordered, order_id) :
+    def __init__ (self, user_id, product_id, portion_id, quantity, ordered, order_id) :
+        self.product, self.portion = self._validate_product_and_portion(product_id, portion_id)
+
         self.user_id = user_id
         self.product_id = product_id
-        self.portion = portion
+        self.portion_id = portion_id
         self.quantity = quantity
         self.ordered = ordered
         self.order_id = order_id
 
-        self.product = Product.query.filter_by(id = product_id).first()
-        if self.product is None :
-            raise ValueError(f'Product does not exist')
-        
-        self.calculate_price()
+        self._calculate_price()
     
+
+    def _validate_product_and_portion (self, product_id, portion_id) :
+        product = Product.query.filter_by(id = product_id).first()
+        if product is None :
+            raise ValueError('Product does not exist')
+        
+        portion = Portion.query.filter_by(id = portion_id).first()
+        if portion is None :
+            raise ValueError('Portion does not exist')
+        
+        if portion.product_id != product_id :
+            raise ValueError('The portion does not correspond to selected product')
+    
+        return product, portion
+    
+    # calculating price of item based on quantity and portion
+    def _calculate_price (self) :
+        total_price = Decimal(self.portion.price) * Decimal(self.quantity)
+        self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
+    
+
     def update_quantity (self, new_quantity) :
         if new_quantity < 0 or new_quantity == None :
             raise ValueError('Invalid quantity provided')
@@ -266,34 +319,23 @@ class Cart_Item (db.Model) :
             return 'delete'
         else :
             self.quantity = new_quantity
+            self._calculate_price()
             
-
-    # calculating price of item based on quantity and portion
-    def calculate_price (self) :
-        if self.portion == Portion.WHOLE:
-            portion_multiplier = Decimal('1')
-        elif self.portion == Portion.MINI:
-            portion_multiplier = Decimal('0.5')
-        elif self.portion == Portion.SLICE:
-            portion_multiplier = Decimal('0.15')
-
-        # price per item
-            # multiple product price by multiplier and round down
-                # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
-        total_price = Decimal(self.product.price * portion_multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
-
-            # replace the last digit with 9 to normalize prices to x.x9 format
-                # particularly for slice options
-        self.price = total_price - (total_price % Decimal('0.10')) + Decimal('0.09')
 
     def as_dict (self) :
         return {
             'id': self.id,
-            'productId': self.product.id,
-            'name': self.product.name,
-            'image': self.product.image,
-            'price': self.price,
-            'portion': serialize_enum(self.portion),
+            'product': {
+                'id': self.product.id,
+                'name': self.product.name,
+                'image': self.product.image
+            },
+            'price': float(self.price),
+            'portion': {
+                'id': self.portion.id,
+                'size': serialize_enum(self.portion.size),
+                'price': float(self.portion.price)
+            },
             'quantity': self.quantity,
             'orderId': self.order_id
         }
@@ -386,16 +428,16 @@ class Order (db.Model) :
         self.task.assign_admin(admin_id)
 
     def status_undo (self, admin_id) :
-        self.validate_status_update(admin_id)
+        self._validate_status_update(admin_id)
         self.status = Order_Status.PENDING
         self.task.unassign_admin()
 
     def status_complete (self, admin_id) :
-        self.validate_status_update(admin_id)
+        self._validate_status_update(admin_id)
         self.status = Order_Status.COMPLETED
         self.task.complete()
 
-    def validate_status_update (self, admin_id) :
+    def _validate_status_update (self, admin_id) :
         if self.status != Order_Status.IN_PROGRESS :
             raise ValueError('Order status could not be updated')
         if self.task.admin_id != admin_id:

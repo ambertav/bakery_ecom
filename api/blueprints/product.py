@@ -94,14 +94,26 @@ def create_product () :
         data = request.get_json()
 
         product_data = {
-            key: data.get(key) for key in ['name', 'description', 'category', 'image', 'price', 'stock']
+            key: data.get(key) for key in ['name', 'description', 'category', 'image']
         }
 
-        new_product = Product(**product_data)
+        try :
+            new_product = Product(**product_data)
+            db.session.add(new_product)
+            db.session.flush()
 
-        db.session.add(new_product)
-        db.session.commit()
-        db.session.refresh(new_product)
+            portions = new_product.create_portions(data.get('price'))
+
+            for portion in portions :
+                db.session.add(portion)
+
+            db.session.commit()
+            db.session.refresh(new_product)
+
+
+        except Exception as error :
+            db.session.rollback()
+            raise error
 
         return jsonify({
             'product': new_product.as_dict(),
