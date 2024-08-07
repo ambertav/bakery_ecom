@@ -371,6 +371,7 @@ class Order (db.Model) :
             db.session.commit()
 
             return task
+        
         except SQLAlchemyError as error :
             db.session.rollback()
             raise error
@@ -380,13 +381,21 @@ class Order (db.Model) :
         self.stripe_payment_id = payment_id
         self.payment_status =  Pay_Status.COMPLETED
 
-    def start (self) :
-        pass
+    def status_start (self, admin_id) :
+        self.status = Order_Status.IN_PROGRESS
+        self.task.assign_admin(admin_id)
 
-    def undoStatus (self) :
-        pass
+    def status_undo (self, admin_id) :
+        if self.status == Order_Status.IN_PROGRESS and self.task.admin_id == admin_id  :
+            self.status = Order_Status.PENDING
+            self.task.unassign_admin()
+        else :
+            if self.status != Order_Status.IN_PROGRESS :
+                raise ValueError('Order status could not be updated')
+            else :
+                raise PermissionError('Requesting admin does not match assigned admin')
 
-    def complete (self) :
+    def status_complete (self) :
         pass
 
     def as_dict (self) :

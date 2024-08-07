@@ -192,26 +192,18 @@ def start_orders_and_assign_admin_tasks () :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
-        
-        data = request.get_json()
 
         try :
-            # start a nested transaction
-            with db.session.begin_nested() :
-                # extract the order ids
-                for order_id in data :
-                    # convert id to int, retrieve orders
-                    order = Order.query.get(int(order_id))
-                    if order :
-                        # set order status to in progress
-                        order.status = Order_Status.IN_PROGRESS
-                        # query for task and assign admin
-                        task = Task.query.filter_by(order_id = order.id).first()
-                        task.assign_admin(admin.id)
-                    else :
-                        raise ValueError(f'Order with id {order_id} was not found')
+            # extract the order ids
+            for order_id in request.get_json() :
+                # convert id to int, retrieve orders
+                order = Order.query.get(int(order_id))
+                if order :
+                    order.status_start(admin.id)
+                else :
+                    raise ValueError(f'Order with id {order_id} was not found')
 
-            # commit nested transaction
+            # commit the transaction
             db.session.commit()
 
         except Exception as error :
@@ -245,19 +237,8 @@ def return_order_to_pending (id) :
         # if found and current status is pending
             # return order to pending
         if order :
-            if order.status == Order_Status.IN_PROGRESS :
-                order.status = Order_Status.PENDING
-
-                # query for and verify that requesting admin is assigned to the task
-                task = Task.query.filter_by(order_id = id, admin_id = admin.id).first()
-                if not task :
-                    return jsonify({
-                        'error': 'Forbidden'
-                    }), 403
-
-                # unassign admin from task
-                task.unassign_admin()
-
+            try :
+                order.status_undo(admin.id)
                 db.session.commit()
 
                 return jsonify({
@@ -265,10 +246,15 @@ def return_order_to_pending (id) :
                 }), 200
             
             # 400 code if order status isn't currently IN_PROGRESS
-            else :
+            # 403 code if unable to match to assigned admin
+            # 500 code else
+            except Exception as error :
+                db.session.rollback()
+                status_code = 400 if isinstance(error, ValueError) else 403 if isinstance(error, PermissionError) else 500
+
                 return jsonify({
-                    'error': 'Order status could not be updated'
-                }), 400
+                    'error': str(error)
+                }), status_code
 
         else :
             return jsonify({
