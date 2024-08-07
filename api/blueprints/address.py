@@ -54,9 +54,9 @@ def update_default (id) :
         if set_default : # if the address to set as default was found
             current_default =  user.addresses.filter_by(default = True).first() # find current default
             if current_default :
-                current_default.default = False # set current default as false
+                current_default.toggle_default() # set current default as false
     
-            set_default.default = True # set new default
+            set_default.toggle_default() # set new default
             db.session.commit()
 
             return jsonify({
@@ -87,12 +87,7 @@ def delete (id) :
         
         deleted_address = user.addresses.filter_by(id = id).first()
 
-        if deleted_address :
-            if deleted_address.default == True : # if the address to delete is designated as default...
-                next_address = user.addresses.filter(Address.id != id).first() # finds next available address to set as default
-                if next_address:
-                    next_address.default = True
-                    
+        if deleted_address :     
             db.session.delete(deleted_address)
             db.session.commit()
 

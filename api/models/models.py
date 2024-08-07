@@ -178,6 +178,9 @@ class Address (db.Model) :
         self.default = default
         self.user_id = user_id
 
+    def toggle_default (self) :
+        self.default = not self.default
+
     def as_dict (self) :
         return {
             'id': self.id,
