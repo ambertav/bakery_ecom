@@ -122,9 +122,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             order = Order.query.filter_by(id = search).first()
             if order :
                 # format order and corresponding cart_items
-                order_data = [
-                    { **order.as_dict() }
-                ]
+                order_data = [ { **order.as_dict() } ]
 
                 return jsonify({
                     'orders': order_data, 
@@ -162,10 +160,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
             if orders.items :
                 # formats orders and corresponding cart_items and tasks
                 order_history = [
-                    { 
-                        **order.as_dict(), 
-                        'task': order.task.as_dict() if order.task else None 
-                    }
+                    {  **order.as_dict(), 'task': order.task.as_dict() if order.task else None }
                     for order in orders.items
                 ]
 
@@ -482,28 +477,12 @@ def create_order (address, user, method) :
 
         db.session.add(new_order)
 
+        new_order.associate_items(items_to_associate)
+        new_order.create_associated_task()
+
         # commit and refresh to get access to new_order.id
         db.session.commit()
         db.session.refresh(new_order)
-
-        # loop through items and update ordered boolean, associate to new order
-        for item in items_to_associate :
-            item.ordered = True
-            item.order_id = new_order.id
-
-            if item.portion == Portion.SLICE :
-                # if portion is slice, deduct by 1/8, or 0.125, * quantity of slices
-                item.product.stock -= Decimal(0.125) * Decimal(item.quantity)
-            elif item.portion == Portion.MINI :
-                # if portion is mini, deduct by 1/2, or 0.5, * quantity of minis
-                item.product.stock -= Decimal(0.5) * Decimal(item.quantity)
-            else :
-                item.product.stock -= Decimal(item.quantity)
-
-        db.session.commit()
-
-        # use class method to create and associate task for new order
-        new_order.create_associated_task()
 
         return new_order
         

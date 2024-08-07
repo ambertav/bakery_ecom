@@ -351,6 +351,13 @@ class Order (db.Model) :
         self.payment_status = payment_status
         self.shipping_address_id = shipping_address_id
 
+
+    def associate_items (self, cart_items) :
+        for item in cart_items :
+            item.order_id = self.id
+            item.ordered = True
+            self.cart_items.append(item)
+
     # method to create basic task associated to order instance
     def create_associated_task (self) :
         try :
@@ -362,11 +369,21 @@ class Order (db.Model) :
             )
             db.session.add(task)
             db.session.commit()
+
             return task
         except SQLAlchemyError as error :
             db.session.rollback()
             raise error
 
+
+    def start (self) :
+        pass
+
+    def undoStatus (self) :
+        pass
+
+    def complete (self) :
+        pass
 
     def as_dict (self) :
         return {
