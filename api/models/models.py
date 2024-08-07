@@ -49,6 +49,12 @@ class Product (db.Model) :
         self.image = image or 'https://example.com/default_image.jpg'
         self.price = float(price)
         self.stock = float(stock)
+
+    def update_attributes (self, data) :
+        for key, value in data.items() :
+            if hasattr(self, key) and getattr(self, key) != value :
+                setattr(self, key, value)
+    
     
     def as_dict (self) : 
         return {
