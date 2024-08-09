@@ -144,7 +144,7 @@ def add_to_cart () :
 def create_item (data, user) : 
     try :
         # ensure valid product
-        product = Product.query.get(data.get('id'))
+        product = Product.query.get(int(data.get('id')))
 
         if not product :
             return {
@@ -153,7 +153,7 @@ def create_item (data, user) :
             }
 
         # search users existing cart for an unordered item with matching product_id and portion size
-        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], ordered = False).first()
+        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion_id = data.get('portiom'), ordered = False).first()
 
         if existing_item :
             try :
@@ -171,7 +171,7 @@ def create_item (data, user) :
                 }
         else :
             # otherwise, create item with product id and inputted quantity and portion
-            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion = Portion[data.get('portion').upper()], quantity = data.get('qty'), ordered = False, order_id = None)
+            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion_id = data.get('portion'), quantity = data.get('qty'), ordered = False, order_id = None)
             db.session.add(new_item)
             success = True
 
