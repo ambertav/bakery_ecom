@@ -62,7 +62,8 @@ class Portion (db.Model) :
             'id': self.id,
             'size': serialize_enum(self.size),
             'stock': self.stock,
-            'price': float(self.price)
+            'price': float(self.price),
+            'soldOut': True if self.stock == 0 else False
         }
 
 
