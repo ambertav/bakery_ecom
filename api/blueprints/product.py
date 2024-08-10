@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify, request, current_app
-from sqlalchemy import text
+from sqlalchemy import text, func
 
 from ...database import db
 from ..utils.auth import auth_user, auth_admin
-from ..models.models import Product, Category
+from ..models.models import Product, Category, Portion
 
 from ..utils.aws_s3 import s3_photo_upload
 
@@ -44,21 +44,21 @@ def product_index () :
         if search :
             base_query = base_query.filter(Product.name.ilike(f'%{search}%'))
 
+        # sub query to push products with no portions in stock down to the bottom
+        sub_query = db.session.query(
+            func.sum(Portion.stock).label('total_stock')
+            ).filter(Portion.product_id == Product.id
+            ).group_by(Portion.product_id).scalar_subquery()
+        
+        base_query = base_query.order_by(func.coalesce(sub_query, 0).desc())
+
         # applying query with pagination
         products = base_query.paginate(page = page, per_page = 10)
 
         # if products are returned...
         if products.items :
             
-            # determining if the user is an admin
-            admin = auth_admin(request)
-
-            if admin :
-                # if admin send all products, format using as_dict()
-                products_list = [ product.as_dict() for product in products.items ]
-            else :
-                # if no user or user is client, send only in stock products, format using as_dict()
-                products_list = [ product.as_dict() for product in products.items if product.stock > 0 ]
+            products_list = [ product.as_dict() for product in products.items ]
             
             return jsonify({
                 'products': products_list,

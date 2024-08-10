@@ -118,9 +118,9 @@ def process_shopping_cart(shopping_cart, user) :
     if shopping_cart :
         for item in shopping_cart :
             data = {
-                'id': item.get('productId'),
+                'id': item.get('product').get('id'),
                 'qty': item.get('quantity'),
-                'portion': item.get('portion'),
+                'portion': item.get('portion').get('id'),
             }
             response = create_item(data, user) # creates cart item for each item in shopping cart
             if not response['success'] :
