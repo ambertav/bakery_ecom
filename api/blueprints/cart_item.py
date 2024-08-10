@@ -153,7 +153,7 @@ def create_item (data, user) :
             }
 
         # search users existing cart for an unordered item with matching product_id and portion size
-        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion_id = data.get('portiom'), ordered = False).first()
+        existing_item = Cart_Item.query.filter_by(user_id = user.id, product_id = product.id, portion_id = data.get('portion'), ordered = False).first()
 
         if existing_item :
             try :
