@@ -323,10 +323,10 @@ def create_checkout_session() :
             'price_data': {
                 'currency': 'usd',
                 'product_data': {
-                    'name': item['name'],
-                    'description': item['portion'],
+                    'name': item['product']['name'],
+                    'description': item['portion']['size']
                 },
-                'unit_amount': int(float(item['price']) * 100), # convert price to cents
+                'unit_amount': int(float(item['portion']['price']) * 100), # convert price to cents
             },
             'quantity': int(item['quantity']),
         }
@@ -417,7 +417,7 @@ def create_order (address, user, method) :
     try :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
-        total = sum(item.price * item.quantity for item in items_to_associate)
+        total = sum(item.price for item in items_to_associate)
 
         # create instance of order and associate with user
         new_order = Order(
@@ -438,6 +438,12 @@ def create_order (address, user, method) :
         db.session.refresh(new_order)
 
         new_order.associate_items(items_to_associate)
+
+        for item in items_to_associate :
+            item.portion.update_stock(item.portion.stock - item.quantity)
+        
+        db.session.commit()
+
         new_order.create_associated_task()
 
         return new_order
