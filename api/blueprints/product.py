@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import text, func
+from sqlalchemy.orm import joinedload
+
 
 from ...database import db
 from ..utils.auth import auth_user, auth_admin
@@ -196,7 +198,49 @@ def product_upload_photo (id) :
 
 @product_bp.route('/inventory/generate-report', methods = ['GET'])
 def product_generate_inventory_report () :
-    pass
+    try :
+        # retrieve token and auth user
+        admin = auth_admin(request)
+
+        if admin is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        low_stock_products = (Product.query
+            .join(Product.portions)
+            .filter(Portion.stock < (Portion.optimal_stock - 5)) # filtering where stock is below ideal threshold
+            .distinct()  # ensures product only comes up once
+            .options(joinedload(Product.portions))
+            .all()
+        )
+        
+        products_list = []
+
+        for product in low_stock_products :
+            # filter for portions based on stock criteria 
+            filtered_portions = [
+                portion for portion in product.portions
+                if portion.stock < (portion.optimal_stock - 5)
+            ]
+            
+            if filtered_portions :
+                # update product with list of filtered portions and convert to dict
+                product.portions = filtered_portions
+                products_list.append(product.as_dict())
+
+        return jsonify({
+            'products': products_list,
+        }), 200
+        
+
+    except Exception as error :
+        current_app.logger.error(f'Error generating inventory report: {str(error)}')
+        return jsonify({
+            'error': error
+        }), 500
+
+
 
 @product_bp.route('/inventory/update', methods = ['PUT'])
 def product_update_inventory () :
