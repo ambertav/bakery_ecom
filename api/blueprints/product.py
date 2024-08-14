@@ -216,6 +216,7 @@ def product_generate_inventory_report () :
         )
         
         products_list = []
+        portions_to_update = {}
 
         for product in low_stock_products :
             # filter for portions based on stock criteria 
@@ -229,8 +230,17 @@ def product_generate_inventory_report () :
                 product.portions = filtered_portions
                 products_list.append(product.as_dict())
 
+                # construct the updatedPortionsState structure with the portions that need stock updates for frontend
+                if product.id not in portions_to_update :
+                    portions_to_update[product.id] = {}
+
+                for portion in filtered_portions :
+                    portions_to_update[product.id][portion.id] = portion.optimal_stock - portion.stock
+
+
         return jsonify({
             'products': products_list,
+            'updatedPortionsState': portions_to_update
         }), 200
         
 
