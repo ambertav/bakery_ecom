@@ -59,6 +59,9 @@ class Portion (db.Model) :
                 # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
         self.price = Decimal(Decimal(price) * multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
 
+    def update_stock (self, new_stock) :
+        self.stock = new_stock
+
     def as_dict (self) :
         return {
             'id': self.id,
