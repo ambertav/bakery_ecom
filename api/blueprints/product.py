@@ -194,6 +194,10 @@ def product_upload_photo (id) :
         }), 500
 
 
+@product_bp.route('/inventory/generate-report', methods = ['GET'])
+def product_generate_inventory_report () :
+    pass
+
 @product_bp.route('/inventory/update', methods = ['PUT'])
 def product_update_inventory () :
     try :
@@ -208,13 +212,20 @@ def product_update_inventory () :
         data = request.get_json()
 
         try :
-            # loop over data, and extract the product id key and stock value
-            for product_id, new_stock in data.items() :
-                # convert id to int, and retrieve product
+            # loop over data, and extract the product id key, portion id and new stock value
+            for product_id, portions in data.items() :
+                # retrieve product
                 product = Product.query.get(int(product_id))
                 if product :
-                    # convert value to int, and set new stock
-                    product.update_attributes({'stock': int(new_stock)})
+                    for portion_id, new_stock in portions.items() :
+                        # retrieve portion and update stock
+                        portion = next((p for p in product.portions if p.id == int(portion_id)), None)
+                        if portion :
+                            portion.update_stock(int(new_stock))
+                        
+                        else :
+                            raise ValueError(f'Portion with id {portion_id} was not found')
+                        
                 else :
                     raise ValueError(f'Product with id {product_id} was not found')
             
