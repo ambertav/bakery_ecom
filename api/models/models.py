@@ -26,6 +26,7 @@ class Portion (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     product_id = db.Column(db.Integer, ForeignKey('products.id'), nullable = False)
     size = db.Column(db.Enum(Portion_Size), nullable = False)
+    optimal_stock = db.Column(db.Integer, default = 10, nullable = False)
     stock = db.Column(db.Integer, nullable = False)
     price = db.Column(db.Numeric(precision = 5, scale = 2), nullable = False)
 
@@ -36,10 +37,11 @@ class Portion (db.Model) :
 
     product = db.relationship('Product', back_populates = 'portions')
 
-    def __init__ (self, product_id, size, stock, price) :
+    def __init__ (self, product_id, size, stock, price, optimal_stock = 10) :
         self.product_id = product_id
         self.size = size
         self.stock = stock
+        self.optimal_stock = optimal_stock
 
         self._calculate_price(price)
 
@@ -57,10 +59,14 @@ class Portion (db.Model) :
                 # encourages last digit being 9, i.e 19.99 * .5 would round down to 9.99 rather than 10
         self.price = Decimal(Decimal(price) * multiplier).quantize(Decimal('0.00'), rounding = ROUND_DOWN)
 
+    def update_stock (self, new_stock) :
+        self.stock = new_stock
+
     def as_dict (self) :
         return {
             'id': self.id,
             'size': serialize_enum(self.size),
+            'optimalStock': self.optimal_stock,
             'stock': self.stock,
             'price': float(self.price),
             'soldOut': True if self.stock == 0 else False

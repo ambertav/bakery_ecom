@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import text, func
+from sqlalchemy.orm import joinedload
+
 
 from ...database import db
 from ..utils.auth import auth_user, auth_admin
@@ -194,6 +196,62 @@ def product_upload_photo (id) :
         }), 500
 
 
+@product_bp.route('/inventory/generate-report', methods = ['GET'])
+def product_generate_inventory_report () :
+    try :
+        # retrieve token and auth user
+        admin = auth_admin(request)
+
+        if admin is None :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        low_stock_products = (Product.query
+            .join(Product.portions)
+            .filter(Portion.stock < (Portion.optimal_stock - 5)) # filtering where stock is below ideal threshold
+            .distinct()  # ensures product only comes up once
+            .options(joinedload(Product.portions))
+            .all()
+        )
+        
+        products_list = []
+        portions_to_update = {}
+
+        for product in low_stock_products :
+            # filter for portions based on stock criteria 
+            filtered_portions = [
+                portion for portion in product.portions
+                if portion.stock < (portion.optimal_stock - 5)
+            ]
+            
+            if filtered_portions :
+                # update product with list of filtered portions and convert to dict
+                product.portions = filtered_portions
+                products_list.append(product.as_dict())
+
+                # construct the updatedPortionsState structure with the portions that need stock updates for frontend
+                if product.id not in portions_to_update :
+                    portions_to_update[product.id] = {}
+
+                for portion in filtered_portions :
+                    portions_to_update[product.id][portion.id] = portion.optimal_stock - portion.stock
+
+
+        return jsonify({
+            'products': products_list,
+            'updatedPortionsState': portions_to_update
+        }), 200
+        
+
+    except Exception as error :
+        current_app.logger.error(f'Error generating inventory report: {str(error)}')
+        return jsonify({
+            'error': error
+        }), 500
+
+
+
 @product_bp.route('/inventory/update', methods = ['PUT'])
 def product_update_inventory () :
     try :
@@ -208,13 +266,20 @@ def product_update_inventory () :
         data = request.get_json()
 
         try :
-            # loop over data, and extract the product id key and stock value
-            for product_id, new_stock in data.items() :
-                # convert id to int, and retrieve product
+            # loop over data, and extract the product id key, portion id and new stock value
+            for product_id, portions in data.items() :
+                # retrieve product
                 product = Product.query.get(int(product_id))
                 if product :
-                    # convert value to int, and set new stock
-                    product.update_attributes({'stock': int(new_stock)})
+                    for portion_id, new_stock in portions.items() :
+                        # retrieve portion and update stock
+                        portion = next((p for p in product.portions if p.id == int(portion_id)), None)
+                        if portion :
+                            portion.update_stock(int(new_stock))
+                        
+                        else :
+                            raise ValueError(f'Portion with id {portion_id} was not found')
+                        
                 else :
                     raise ValueError(f'Product with id {product_id} was not found')
             
