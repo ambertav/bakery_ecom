@@ -4,8 +4,9 @@ from sqlalchemy.orm import joinedload
 
 
 from ...database import db
-from ..utils.auth import auth_user, auth_admin
-from ..models.models import Product, Category, Portion
+from ..utils.auth import auth_admin
+from ..models.product import Product, Category
+from ..models.portion import Portion
 
 from ..utils.aws_s3 import s3_photo_upload
 

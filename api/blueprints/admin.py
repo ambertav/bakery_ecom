@@ -5,7 +5,7 @@ import os
 
 from ...database import db
 from ..utils.auth import auth_admin
-from ..models.models import Admin
+from ..models import Admin
 
 admin_bp = Blueprint('admin', __name__)
 
