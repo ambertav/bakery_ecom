@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify, request, current_app
-from flask_cors import cross_origin
 
 from ...database import db
 from ..utils.auth import auth_user
-from ..models.models import User, Product, Category, Cart_Item, Portion
+
+from ..models import Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
 

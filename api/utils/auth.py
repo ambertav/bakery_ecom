@@ -1,6 +1,6 @@
 from firebase_admin import auth
 
-from ..models.models import User, Admin
+from ..models import User, Admin
 
 def auth_user (request) :
     if 'Authorization' not in request.headers :

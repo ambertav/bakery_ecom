@@ -1,9 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app
-from flask_cors import cross_origin
 
 from ...database import db
 from ..utils.auth import auth_user
-from ..models.models import Address
+from ..models import Address
 
 address_bp = Blueprint('address', __name__)
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from ...database import db
 from ..utils.auth import auth_user, auth_admin
-from ..models.models import User
+from ..models import User
 
 from .cart_item import create_item
 

@@ -5,11 +5,10 @@ import os
 import json
 import datetime
 
-from decimal import Decimal
-
 from ...database import db
 from ..utils.auth import auth_user, auth_admin
-from ..models.models import User, Address, Cart_Item, Portion, Order, Order_Status, Pay_Status, Deliver_Method, Task
+from ..models import Address, Cart_Item, Order
+from ..models.order import Order_Status, Pay_Status, Deliver_Method
 
 webhook_secret = os.getenv('WEBHOOK_SECRET')
 
