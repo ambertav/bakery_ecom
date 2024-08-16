@@ -1,6 +1,6 @@
 from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
-import importlib
+from .task import Task
 
 from ...database import db
 
@@ -64,14 +64,8 @@ class Order (db.Model) :
             item.ordered = True
             self.cart_items.append(item)
 
-    def _get_task_model (self) :
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Task')
-
     # method to create basic task associated to order instance
     def create_associated_task (self) :
-        Task = self._get_task_model()
-        
         try :
             task = Task(
                 admin_id = None,

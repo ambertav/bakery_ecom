@@ -1,6 +1,7 @@
 from enum import Enum
 from sqlalchemy import CheckConstraint
-import importlib
+from .portion import Portion, Portion_Size
+
 
 from ...database import db
 
@@ -35,19 +36,7 @@ class Product (db.Model) :
         self.category = Category(category)
         self.image = image or 'https://example.com/default_image.jpg'
 
-    
-    def _get_portion_model (self) :
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Portion')
-
-    def _get_portion_size_enum (self) :
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Portion_Size')
-
     def create_portions (self, price) :
-        Portion = self._get_portion_model()
-        Portion_Size = self._get_portion_size_enum()
-
         portions = [Portion_Size.WHOLE]
 
         if self.category in [Category.CAKE, Category.PIE] :

@@ -1,6 +1,7 @@
 from sqlalchemy import CheckConstraint, and_, or_
 from decimal import Decimal, ROUND_CEILING
-import importlib
+from .product import Product
+from .portion import Portion
 
 from ...database import db
 
@@ -45,19 +46,9 @@ class Cart_Item (db.Model) :
         self._calculate_price()
     
 
-    def _get_product_model (self) :
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Product')
-
-    def _get_portion_model (self) :
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Portion')
-
     def _validate_product_and_portion (self, product_id, portion_id) :
-        Product = self._get_product_model()
-        Portion = self._get_portion_model()
-
         product = Product.query.filter_by(id = product_id).first()
+
         if product is None :
             raise ValueError('Product does not exist')
         

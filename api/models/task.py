@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-import importlib
+from .admin import Admin
 
 from ...database import db
 
@@ -17,11 +17,6 @@ class Task (db.Model) :
         self.order_id = order_id
         self.assigned_at = assigned_at
         self.completed_at = completed_at
-    
-    def _get_admin_model(self):
-        models_module = importlib.import_module('app.models')
-        return getattr(models_module, 'Admin')
-
 
     # assigns an admin if an admin is not already assigned
     def assign_admin (self, admin_id) :
@@ -50,7 +45,6 @@ class Task (db.Model) :
             return False
 
     def as_dict (self) :
-        Admin = self._get_admin_model()
         admin = Admin.query.get(self.admin_id)
         admin_name = admin.name if admin else None
     
