@@ -3,6 +3,23 @@ from firebase_admin import auth
 from ..models import User, Admin
 
 def auth_user (request) :
+    '''
+    Authenticates user using Firebase ID provided in request headers
+
+    Extracts and verifies Firebase ID token from 'Authorization; header, and retrieves
+    associated user from database. If an associated user is not found, None is returned.
+
+    Args :
+        request (Request) : incoming Flask request containing 'Authorization' header with token.
+
+    Returns :
+        User : authenticated user object if found
+        None : if the user is not found or if there is an issue with token.
+
+    Raises :
+        ValueError : if there is an error suring token verification or user retrieval
+    '''
+
     if 'Authorization' not in request.headers :
         return None
     
@@ -20,10 +37,27 @@ def auth_user (request) :
             return user
         
     except Exception as error :
-        return error
+        raise ValueError(f'Authentication failed: {str(error)}')
     
         
 def auth_admin (request) :
+    '''
+    Authenticates admin using Firebase ID provided in request headers
+
+    Extracts and verifies Firebase ID token from 'Authorization; header, and retrieves
+    associated admin from database. If an associated admin is not found, None is returned.
+
+    Args :
+        request (Request) : incoming Flask request containing 'Authorization' header with token.
+
+    Returns :
+        Admin : authenticated admin object if found
+        None : if the admin is not found or if there is an issue with token.
+
+    Raises :
+        ValueError : if there is an error suring token verification or user retrieval
+    '''
+    
     if 'Authorization' not in request.headers :
         return None
     
@@ -41,4 +75,4 @@ def auth_admin (request) :
             return admin
         
     except Exception as error :
-        return error
+        raise ValueError(f'Authentication failed: {str(error)}')

@@ -13,6 +13,12 @@ user_bp = Blueprint('user', __name__)
 
 @user_bp.route('/signup', methods = ['POST'])
 def signup () :
+    '''
+    Handle user signup by verifying the Firebase token, creating a new user, and processing the shopping cart.
+
+    Returns :
+        Response : JSON response with a success message and any cart errors if applicable, or an error message in case of failure.
+    '''
     try :
         # retrieve token
         token = request.headers['Authorization'].replace('Bearer ', '')
@@ -57,6 +63,12 @@ def signup () :
 
 @user_bp.route('/login', methods = ['POST'])
 def login () :
+    '''
+    Handle user login by authenticating the user and processing the shopping cart.
+
+    Returns :
+        Response : JSON response with a success message and any cart errors if applicable, or an error message in case of failure.
+    '''
     try :
         user = auth_user(request)
 
@@ -85,6 +97,12 @@ def login () :
     
 @user_bp.route('/info', methods = ['GET'])
 def get_user_info () :
+    '''
+    Retrieve user or admin status and information.
+
+    Returns :
+        Response : JSON response with the user's / admin's name and admin status, or an error message in case of failure.
+    '''
     try :
         # authenticate for both user and admin
         user = auth_user(request)
@@ -114,6 +132,20 @@ def get_user_info () :
 
 
 def process_shopping_cart(shopping_cart, user) :
+    '''
+    Process the shopping cart by creating cart items for each product.
+
+    Intended for use for when user creates cart_items in local storage when unauthenticated,
+    to then create associated cart_items when the user autenticates (both via signing up,
+    or logging in).
+
+    Args :
+        shopping_cart (list) : list of cart items from local storage.
+        user (User) : user object.
+
+    Returns :
+        str : a string of errors, if any, encountered while processing the cart items.
+    '''
     errors = []
     if shopping_cart :
         for item in shopping_cart :

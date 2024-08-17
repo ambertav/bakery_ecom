@@ -16,6 +16,14 @@ order_bp = Blueprint('order', __name__)
 
 @order_bp.route('/', methods = ['GET'])
 def order_history_index () :
+    '''
+    Retrieves paginated list of orders for authenticated user.
+
+    Optionally, if 'recent' parameter is set to 'true', filters to show the 3 most recents orders
+
+    Returns :
+        Response : JSON response containing list of order dictionaries, total pages, and the current page, or error message.
+    '''
     try :
         # retrieve token and auth user
         user = auth_user(request)
@@ -61,6 +69,12 @@ def order_history_index () :
 
 @order_bp.route('/<int:id>', methods = ['GET'])
 def show_order (id) :
+    '''
+    Retrieves details for a specific order by ID for the authenticated user.
+    
+    Returns :
+        Response : JSON response with order details or an error message if there an error occurred or if order is not found.
+    '''
     try :
         user = auth_user(request)
 
@@ -89,6 +103,14 @@ def show_order (id) :
 
 @order_bp.route('/fulfillment/pending/', methods = ['GET'])
 def order_fulfillment_get_pending () :
+    '''
+    Retrieves a paginated list of pending orders for admins.
+
+    Optionally filters by delivery method and search term if 'delivery-method' or 'search' parameters are present.
+    
+    Returns :
+        Response : JSON response with pending orders or error message.
+    '''
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
@@ -98,6 +120,14 @@ def order_fulfillment_get_pending () :
 
 @order_bp.route('/fulfillment/in-progress/', methods = ['GET'])
 def order_fulfillment_get_in_progress () :
+    '''
+    Retrieves a paginated list of orders in progress for admins.
+
+    Optionally filters by delivery method and search term if 'delivery-method' or 'search' parameters are present.
+    
+    Returns :
+        Response : JSON response with in-progress orders or error message.
+    '''
     # user auth done in get_fulfillment_orders_by_status function
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
@@ -106,6 +136,20 @@ def order_fulfillment_get_in_progress () :
 
 
 def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
+    '''
+    Retrieves a paginated list of orders based on their fulfillment status for admins.
+
+    Optionally filters by delivery method and search term if present.
+    
+    Args :
+        status (str) : fulfillment status of the orders to retrieve.
+        page (int) : page number for pagination.
+        delivery_method (str) : optional filter for delivery method.
+        search (str) : optional search term to filter by order ID.
+    
+    Returns :
+        Response : JSON response with list of order dictionaries, total pages, and the current page, or error message.
+    '''
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -184,6 +228,15 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
 
 @order_bp.route('/fulfillment/set-in-progress/', methods = ['PUT'])
 def start_orders_and_assign_admin_tasks () :
+    '''
+    Starts one or multiple orders and assigns associated tasks to the authenticated admin.
+
+    Request Body :
+        data (list) : list of string order IDs of the orders to update
+    
+    Returns :
+        Response : JSON response indicating success or error message.
+    '''
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -222,6 +275,16 @@ def start_orders_and_assign_admin_tasks () :
 
 @order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
 def return_order_to_pending (id) :
+    '''
+    Returns a specific order to pending status and unassigns the associated admin.
+
+    If the requesting admin does not match the associated admin, a PermissionError is raised.
+    If the order is not in-progress at the time of the request or if the order is not
+    found, a ValueError is raised.
+    
+    Returns :
+        Response : JSON response indicating success or error message.
+    '''
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -258,6 +321,16 @@ def return_order_to_pending (id) :
 
 @order_bp.route('/fulfillment/<int:id>/set-complete/', methods = ['PUT'])
 def complete_order_fulfillment (id) :
+    '''
+    Marks a specific order to as completed and finalizes the associated task.
+
+    If the requesting admin does not match the associated admin, a PermissionError is raised.
+    If the order is not in-progress at the time of the request or if the order is not
+    found, a ValueError is raised.
+    
+    Returns :
+        Response : JSON response indicating success or error message.
+    '''
     try :
         # authentication and authorization check
         admin = auth_admin(request)
@@ -294,6 +367,18 @@ def complete_order_fulfillment (id) :
 
 @order_bp.route('/create-checkout-session', methods = ['POST'])
 def create_checkout_session() :
+    '''
+    Creates a Stripe checkout session for the authenticated user based on cart information.
+
+    Request Body :
+        cart (Cart_Item) : cart_items the user is checking out for.
+        method (str) : delivery method for the order.
+        billing (Address) : billing address for the order.
+        shipping (Address) : shipping address for the order.
+    
+    Returns :
+        Response : JSON response with the Stripe checkout URL or error message.
+    '''
     # retrieve token and auth user
     user = auth_user(request)
 
@@ -359,7 +444,12 @@ def create_checkout_session() :
     
 @order_bp.route('/stripe-webhook', methods = ['POST'])    
 def handle_stripe_webhook () :
-
+    '''
+    Handles Stripe webhook events to finalize orders upon successful checkout.
+    
+    Returns:
+        Response : JSON response indicating success or failure.
+    '''
     event = None
     payload = request.data
 
@@ -413,6 +503,17 @@ def handle_stripe_webhook () :
     )
 
 def create_order (address, user, method) :
+    '''
+    Creates a new order and associates it with the given user, address, and delivery method.
+    
+    Args :
+        address (int) : ID of the address for shipping.
+        user (int) : ID of the user placing the order.
+        method (str) : delivery method for the order.
+    
+    Returns :
+        Order instance if successful, otherwise an error response.
+    '''
     try :
         # find the cart items and calculate total
         items_to_associate = Cart_Item.query.filter_by(user_id = user, ordered = False).all()
@@ -424,7 +525,6 @@ def create_order (address, user, method) :
             date = datetime.datetime.now(),
             total_price = total,
             status = Order_Status.PENDING,
-            stripe_payment_id = None,
             delivery_method = Deliver_Method[method.upper()],
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address,
@@ -454,6 +554,19 @@ def create_order (address, user, method) :
         }), 500
     
 def handle_address (address, user) :
+    '''
+    Handles address creation or retrieval for the authenticated user to be used for order checkout.
+
+    Attempts to retrieve a matching address from user's associated addresses, and creates a new address
+    instance if no matching existing address is found.
+    
+    Args :
+        address (dict) : address details.
+        user (int) : ID of the user.
+    
+    Returns:
+        Address ID if successful, otherwise an error response.
+    '''
     try :
         
         # process the address input so that capitals and extra space are removed
@@ -501,6 +614,15 @@ def handle_address (address, user) :
 
 
 def handle_status_update_error (error) :
+    '''
+     Handles errors occurring during status updates of orders.
+    
+    Args :
+        error (Exception) : the exception that occurred.
+    
+    Returns :
+        Response : JSON response with error details and appropriate HTTP status code.
+    '''
     # 400 code if order status isn't currently IN_PROGRESS
     # 403 code if unable to match to assigned admin
     # 500 code else

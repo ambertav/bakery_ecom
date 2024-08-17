@@ -7,9 +7,17 @@ from ..models import Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
 
-# index
 @cart_item_bp.route('/', methods = ['GET'])
 def view_cart() :
+    '''
+    Retrieves the user's shopping cart.
+
+    Fetches all cart_items associated to the user that have not been ordered.
+
+    Returns :
+        Response : JSON response containing a list of cart_item dictionaries in or an empty list
+        if no items are present, or an error message if an error occurs.
+    '''
     try :
         user = auth_user(request)
 
@@ -21,9 +29,7 @@ def view_cart() :
         cart_items = Cart_Item.query.filter_by(user_id = user.id, ordered = False).all()
 
         if cart_items :
-            shopping_cart = [
-                item.as_dict() for item in cart_items
-            ]
+            shopping_cart = [ item.as_dict() for item in cart_items ]
         else :
             shopping_cart = None
         
@@ -37,9 +43,15 @@ def view_cart() :
             'error': 'Internal server error'
         }), 500
 
-# delete
 @cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
 def delete_cart_item (id) :
+    '''
+    Deletes a specific item from the user's associated cart_items using the ID
+
+    Returns :
+        Response : JSON response with a sucess message if the item is deleted, or an 
+        error message if there is an error or the item is not found.
+    '''
     try :
         user = auth_user(request)
 
@@ -57,6 +69,7 @@ def delete_cart_item (id) :
         
         db.session.delete(cart_item)
         db.session.commit()
+
         return jsonify({
             'message': 'Item deleted from cart successfully'
         }), 200
@@ -67,9 +80,20 @@ def delete_cart_item (id) :
             'error': 'Internal server error'
         }), 500
 
-# update
 @cart_item_bp.route('/<int:id>/update', methods = ['PUT'])
 def update_quantity (id) :
+    '''
+    Updates the quantity of a specific item associated with the user.
+
+    If the updated quantity is zero, the cart_item is deleted.
+
+    Request Body :
+        - newQty (int) : quantity to update on cart_item
+
+    Returns :
+        Response : JSON response with a success message is quantity is updated, or an error
+        message if there is an error, if the cart_item is not found, or if the quantity is invalid. 
+    '''
     try :
         user = auth_user(request)
 
@@ -110,9 +134,20 @@ def update_quantity (id) :
             'error': 'Internal server error'
         }), 500
 
-# create
 @cart_item_bp.route('/add', methods = ['POST'])
 def add_to_cart () :
+    '''
+    Adds a new cart_item to the user's cart. 
+
+    If the cart_item is already existing in the user's cart, updates the quantity of the cart_item.
+
+    Request Body :
+        data (dict) : data for the cart item including product ID, portion ID, and quantity.
+
+    Returns :
+        Response : JSON response with a success message if the item is added or updated successfully
+        or an error message if there is an error or if the corresponding product is not found.
+    '''
     try :
         # retrieve token
         user = auth_user(request)
@@ -142,6 +177,19 @@ def add_to_cart () :
         }), 500
     
 def create_item (data, user) : 
+    '''
+    Creates or updates a cart_item in the user's cart.
+
+    Checks if the corresponding product exists, and either creates a new cart_ttem 
+    or updates the quantity of an existing cart_item. 
+
+    Args :
+        data (dict) : data for the cart item including product ID, portion ID, and quantity.
+        user (User) : requesting user who is adding the item to the cart.
+
+    Returns :
+        dict : dictionary with boolean success status and string message.
+    '''
     try :
         # ensure valid product
         product = Product.query.get(int(data.get('id')))

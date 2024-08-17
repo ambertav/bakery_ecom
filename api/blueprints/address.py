@@ -8,6 +8,15 @@ address_bp = Blueprint('address', __name__)
 
 @address_bp.route('/', methods = ['GET'])
 def get_addresses () :
+    '''
+    Retrieves the addressed associated with the authenticated user.
+
+    If a 'default' query parameter is provided and set to 'true', only the address matched default = True is returned.
+    Otherwise, all addresses are returned with the default address at the top.
+
+    Returns :
+        Response : JSON response containing a list of address dictionaries or an error message
+    '''
     try :
         user = auth_user(request)
 
@@ -19,11 +28,11 @@ def get_addresses () :
         is_default = request.args.get('default', '').lower() == 'true'
 
         if is_default:
-            # Retrieve the default address for the user
+            # retrieve the default address for the user
             default_address = user.addresses.filter_by(default = True).first()
             address_history = default_address.as_dict() if default_address else []
         else:
-            # Retrieve all addresses for the user
+            # retrieve all addresses for the user
             addresses = user.addresses.order_by(Address.default.desc()).all() # sends default at the top
             address_history = [ address.as_dict() for address in addresses ] if addresses else []
 
@@ -39,6 +48,18 @@ def get_addresses () :
     
 @address_bp.route('/default/<int:id>', methods = ['PUT'])
 def update_default (id) :
+    '''
+    Updates the default address for the authenticated user.
+
+    Sets the address with the given ID as the default.
+    If there is already a default address, it is updated to no longer be the default.
+
+    Args :
+        id (int) : ID of the address to set as the default.
+
+    Returns :
+        Response : JSON response indicating success or an error message.
+    '''
     try :
         # retrieve token and auth user
         user = auth_user(request)
@@ -75,6 +96,17 @@ def update_default (id) :
     
 @address_bp.route('/<int:id>/delete', methods = ['DELETE'])
 def delete (id) :
+    '''
+    Deletes an address for authenticated user.
+
+    Removes the address with the given ID from the user's addresses.
+
+    Args :
+        id (int) : ID of the address to delete.
+
+    Returns :
+        Response : JSON response indicating success or an error message.
+    '''
     try : 
         # retrieve token and auth user
         user = auth_user(request)
