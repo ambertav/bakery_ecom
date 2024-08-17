@@ -1,11 +1,29 @@
 from sqlalchemy import CheckConstraint, and_, or_
 from decimal import Decimal, ROUND_CEILING
+
 from .product import Product
 from .portion import Portion
 
 from ...database import db
 
+
 class Cart_Item (db.Model) :
+    '''
+    Represents an item in a user's shopping cart.
+
+    Attributes :
+        id (int) : unique identifier for cart item.
+        user_id (int) : ID of the user who owns the cart item.
+        product_id (int) : ID of the product associated with cart item.
+        portion_id (int) : ID of the portion associated with cart item.
+        quantity (int) : quantity of the product in the cart.
+        price (Decimal) : price of the cart item (accounts for quantity).
+        ordered (bool) : Whether the item has been ordered.
+        order_id (int or None) : ID of the order if the item has been ordered.
+        user (relationship) :  relationship to the user owning the cart item.
+        product (relationship) : relationship to the product associated with the cart item.
+        portion (relationship) : relationship to the portion associated with the cart item.
+    '''
     __tablename__ = 'cart_items'
 
     id = db.Column(db.Integer, primary_key = True)
@@ -18,8 +36,13 @@ class Cart_Item (db.Model) :
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable = True)
 
     __table_args__ = (
+        # ensures quantity is equal or greater to 1
         CheckConstraint('quantity >= 1', name = 'non_negative_quantity'),
-         CheckConstraint(
+
+        # ensures that...
+            # if ordered, order_id is not None
+            # if not ordered, order_id is None
+        CheckConstraint(
             or_(
                 and_(ordered == True, order_id != None),
                 and_(ordered == False, order_id == None)
@@ -34,6 +57,18 @@ class Cart_Item (db.Model) :
     portion = db.relationship('Portion')
 
     def __init__ (self, user_id, product_id, portion_id, quantity, ordered, order_id) :
+        '''
+        Initializes a new cart_item instance.
+
+        Args :
+            user_id (int) : ID of the user who owns the cart item.
+            product_id (int) : ID of the product associated with cart item.
+            portion_id (int) : ID of the portion associated with cart item.
+            quantity (int) : quantity of the product in the cart.
+            ordered (bool) : Whether the item has been ordered.
+            order_id (int or None) : ID of the order if the item has been ordered.
+        '''
+        # verifies product and portion and then defines relationship
         self.product, self.portion = self._validate_product_and_portion(product_id, portion_id)
 
         self.user_id = user_id
@@ -45,8 +80,20 @@ class Cart_Item (db.Model) :
 
         self._calculate_price()
     
-
     def _validate_product_and_portion (self, product_id, portion_id) :
+        '''
+        Validates the product and portion IDs prior to initializing cart_item.
+
+        Args :
+            product_id (int) : ID of the product.
+            portion_id (int) : ID of the portion.
+
+        Returns :
+            tuple : tuple containing the Product and Portion instances.
+        
+        Raises :
+            ValueError : if product or portion does not exist, or if the portion does not correspond to the product.
+        '''
         product = Product.query.filter_by(id = product_id).first()
 
         if product is None :
@@ -61,13 +108,29 @@ class Cart_Item (db.Model) :
     
         return product, portion
     
-    # calculating price of item based on quantity and portion
     def _calculate_price (self) :
+        '''
+        Calculates the price of the cart_item based on quantity and portion price.
+        Updates the price attribute with the calculated value.
+        '''
         total_price = Decimal(self.portion.price) * Decimal(self.quantity)
         self.price = total_price.quantize(Decimal('0.01'), rounding = ROUND_CEILING)
     
 
     def update_quantity (self, new_quantity) :
+        '''
+        Updates the quantity of the cart_item.
+
+        Args :
+            new_quantity (int) : new quantity for the cart_item.
+        
+        Returns :
+            str : 'delete' if the new quantity is zero and cart_item should be deleted.
+            None : if quantity and price were successfully updated.
+        
+        Raises :
+            ValueError : if the new quantity is negative or None.
+        '''
         if new_quantity < 0 or new_quantity == None :
             raise ValueError('Invalid quantity provided')
         elif new_quantity == 0 :
@@ -78,6 +141,12 @@ class Cart_Item (db.Model) :
             
 
     def as_dict (self) :
+        '''
+        Converts cart_item to a dictionary.
+
+        Returns :
+            dict : dictionary representation of the cart_item, including product and portion details. NOTE: camelCasing for ease in frontend.
+        '''
         return {
             'id': self.id,
             'product': {
