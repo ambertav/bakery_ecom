@@ -11,6 +11,19 @@ admin_bp = Blueprint('admin', __name__)
 
 @admin_bp.route('/signup/', methods = ['POST'])
 def admin_signup () :
+    '''
+    Registers a new admin user.
+
+    Retrieves the Firebase token from the request headers, decodes to get user's UID, and creates a new admin
+    record in the database.
+
+    Request Body :
+        - name (str) : name of admin.
+        - pin (str) : PIN for admin account.
+    
+    Returns :
+        Response : JSON response with admin's employee id and a success message or an error message.
+    '''
     try :
         # retrieve token
         token = request.headers['Authorization'].replace('Bearer ', '')
@@ -56,6 +69,18 @@ def admin_signup () :
 
 @admin_bp.route('/login/', methods = ['POST'])
 def admin_login () :
+    '''
+    Logs in an existing admin.
+
+    Authenticates an admin by matching provided employee ID and PIN, checking if PIN is valid and not expired.
+
+    Request Body :
+        - employeeId (str) : requesting admin's employee ID.
+        - pin (str) : requesting admin's PIN.
+
+    Returns :
+        Response : JSON response containing a sucess or error message.
+    '''
     try :
         # matching firebase_uid to retrieve admin
         admin = auth_admin(request)
@@ -85,6 +110,19 @@ def admin_login () :
     
 @admin_bp.route('/update-pin/', methods = ['POST'])
 def admin_update_pin () :
+    '''
+    Updates the requesting admin's PIN.
+
+    Validates the provided employee ID and old PIN, updates the PIN and sets a new expiration date.
+
+    Request Body :
+        - employeeId (str) : requesting admin's employee ID.
+        - oldPin (str) : requesting admin's PIN.
+        - pin (str) : new PIN to update.
+
+    Returns :
+        Response : JSON response containing a sucess or error message.
+    '''
     try :
         # retrieve admin from firebase_uid
         admin = auth_admin(request)
@@ -113,6 +151,17 @@ def admin_update_pin () :
 
 @admin_bp.route('/validate-code/', methods = ['POST'])
 def validate_employer_code () :
+    '''
+    Validates the employer code for admin signup
+
+    Checks if the provided code matches the stored employer code, authorizing the creation of admins
+
+    Request Body :
+        code (str) : employer code
+
+    Returns :
+        Response : JSON response indicating whether the code is valid or not.
+    '''
     # used to validate an admin signup
         # to ensure not just any user tries to create an admin level account
     employer_code = os.getenv('EMPLOYER_CODE')

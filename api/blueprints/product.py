@@ -15,6 +15,21 @@ product_bp = Blueprint('product', __name__)
 
 @product_bp.route('/', methods = ['GET'])
 def product_index () :
+    '''
+    Retrieves a paginated list of products with optional filters for category, 
+    search term, and sorting. Products with no portions in stock are pushed to the 
+    bottom of the list.
+
+    Query Parameters :
+    - page (int) : The page number for pagination (default is 1).
+    - category (str) : category to filter products by.
+    - search (str) : search term to filter products by name.
+    - sort (str) : sorting option ('priceAsc', 'priceDesc', 'nameAsc', 'nameDesc').
+
+    Returns :
+    - JSON response containing the list of product dictionaries, total pages, and current page.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         # extract page and params
         page = request.args.get('page', 1, type = int)
@@ -85,6 +100,18 @@ def product_index () :
 
 @product_bp.route('/create', methods = ['POST'])
 def create_product () :
+    '''
+    Creates a new product along with its associated portions.
+
+    Request Body :
+    - JSON containing the product details : 'name', 'description', 'category', 'image'.
+    - JSON containing the price details for the portions.
+
+    Returns :
+    - JSON response containing the created product details and a success message.
+    - On authentication failure, returns a 401 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         # retrieve token and auth user
         admin = auth_admin(request)
@@ -132,6 +159,18 @@ def create_product () :
 
 @product_bp.route('/<int:id>/update', methods = ['PUT'])
 def product_update (id) :
+    '''
+    Updates the attributes of an existing product.
+
+    Request Body :
+    - JSON containing the updated product attributes.
+
+    Returns :
+    - JSON response containing the updated product details and a success message.
+    - On authentication failure, returns a 401 status with an error message.
+    - On product not found, returns a 404 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         # retrieve token and auth user
         admin = auth_admin(request)
@@ -166,6 +205,18 @@ def product_update (id) :
 
 @product_bp.route('<int:id>/upload_photo', methods = ['POST'])
 def product_upload_photo (id) :
+    '''
+    Uploads a photo for the specified product and updates the product's image URL.
+
+    Request :
+    - Multipart/form-data containing the image file.
+
+    Returns :
+    - JSON response with a success message when the image is uploaded successfully.
+    - On product not found, returns a 404 status with an error message.
+    - On missing image file, returns a 400 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         if 'image' not in request.files:
             return jsonify({
@@ -199,6 +250,17 @@ def product_upload_photo (id) :
 
 @product_bp.route('/inventory/generate-report', methods = ['GET'])
 def product_generate_inventory_report () :
+    '''
+    Generates a report of products that need inventory restocking based on 
+    portion stock levels.
+
+    Returns :
+    - JSON response containing a list of products with low stock and the portions 
+      that need restocking.
+    - JSON response with an updatedPortionsState structure for frontend updates.
+    - On authentication failure, returns a 401 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         # retrieve token and auth user
         admin = auth_admin(request)
@@ -255,6 +317,17 @@ def product_generate_inventory_report () :
 
 @product_bp.route('/inventory/update', methods = ['PUT'])
 def product_update_inventory () :
+    '''
+    Updates the stock of portions for multiple products based on the input data.
+
+    Request Body :
+    - JSON containing the product IDs, portion IDs, and the new stock values.
+
+    Returns :
+    - JSON response with a success message when the inventory is updated successfully.
+    - On authentication failure, returns a 401 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         admin = auth_admin(request)
 
@@ -304,6 +377,14 @@ def product_update_inventory () :
 
 @product_bp.route('/<int:id>', methods = ['GET'])
 def product_show (id) :
+    '''
+    Retrieves the details of a specific product by its ID.
+
+    Returns :
+    - JSON response containing the product details.
+    - On product not found, returns a 404 status with an error message.
+    - On error, returns a 500 status with an error message.
+    '''
     try :
         product = Product.query.get(id)
 
