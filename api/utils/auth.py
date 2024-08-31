@@ -1,78 +1,63 @@
-from firebase_admin import auth
+import jwt
 
 from ..models import User, Admin
+from .token import decode_jwt
+
 
 def auth_user (request) :
     '''
-    Authenticates user using Firebase ID provided in request headers
-
-    Extracts and verifies Firebase ID token from 'Authorization; header, and retrieves
-    associated user from database. If an associated user is not found, None is returned.
+    Authenticate a user based on the access token in the request cookies.
 
     Args :
-        request (Request) : incoming Flask request containing 'Authorization' header with token.
+        request (flask.Request) : request object containing the cookies.
 
     Returns :
-        User : authenticated user object if found
-        None : if the user is not found or if there is an issue with token.
-
-    Raises :
-        ValueError : if there is an error suring token verification or user retrieval
+        User or None: authenticated user object if successful, otherwise None.
     '''
+    return authenticate(User, request)
 
-    if 'Authorization' not in request.headers :
-        return None
-    
-    try :
-        # decode to retrieve uid
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
 
-        user = User.query.filter_by(firebase_uid = uid).first()
-
-        if not user :
-            return None
-        else :
-            return user
-        
-    except Exception as error :
-        raise ValueError(f'Authentication failed: {str(error)}')
-    
-        
 def auth_admin (request) :
     '''
-    Authenticates admin using Firebase ID provided in request headers
-
-    Extracts and verifies Firebase ID token from 'Authorization; header, and retrieves
-    associated admin from database. If an associated admin is not found, None is returned.
+    Authenticate an admin based on the access token in the request cookies.
 
     Args :
-        request (Request) : incoming Flask request containing 'Authorization' header with token.
+        request (flask.Request) : request object containing the cookies.
 
     Returns :
-        Admin : authenticated admin object if found
-        None : if the admin is not found or if there is an issue with token.
+        Admin or None: authenticated admin object if successful, otherwise None.
+    '''
+    return authenticate(Admin, request)
+
+
+def authenticate (model, request) :
+    '''
+    Authenticate a user or admin based on the access token in the request cookies.
+
+    Args:
+        model (Type[User or Admin]) : model class (User or Admin) to query for authentication.
+        request (flask.Request) : request object containing the cookies.
+
+    Returns :
+        User or Admin or None: authenticated user or admin object if successful, otherwise None.
 
     Raises :
-        ValueError : if there is an error suring token verification or user retrieval
+        ValueError : If the token has expired or is invalid.
     '''
-    
-    if 'Authorization' not in request.headers :
-        return None
-    
     try :
-        # decode to retrieve uid
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
+        token = request.cookies.get('access_token')
 
-        admin = Admin.query.filter_by(firebase_uid = uid).first()
-
-        if not admin :
+        if not token :
             return None
-        else :
-            return admin
         
-    except Exception as error :
-        raise ValueError(f'Authentication failed: {str(error)}')
+        id = decode_jwt(token)
+
+        user_or_admin = model.query.get(id)
+
+        return user_or_admin if user_or_admin else None
+        
+    except jwt.ExpiredSignatureError :
+        raise ValueError('Token has expired')
+    
+    except jwt.InvalidTokenError :
+        raise ValueError('Invalid token')

@@ -18,6 +18,6 @@ def decode_jwt (token) :
         decoded_payload = jwt.decode(token, secret_key, algorithms=['HS256'])
         return decoded_payload.get('sub')
     
-    except jwt.InvalidTokenError :
-        return 'Invalid token'
+    except Exception as error :
+        raise error
     
