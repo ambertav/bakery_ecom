@@ -128,8 +128,10 @@ def get_user_info () :
 
         # return info
         return jsonify({
-            'name': name, 
-            'isAdmin': is_admin
+            'user': {
+                'name': name,
+                'isAdmin': is_admin
+            }
         }), 200
     
     except Exception as error :
