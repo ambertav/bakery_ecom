@@ -102,6 +102,33 @@ def login () :
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+@user_bp.route('/logout', methods = ['GET'])
+def logout () :
+    try :
+        response = make_response(jsonify({
+            'message': 'Successfully logged out'
+        }), 200)
+
+        # set new cookie that's expired and has and empty value 
+        response.set_cookie(
+            'access_token',
+            value = '',
+            httponly = 'true',
+            expires = 0,
+            max_age = 60 * 60 * 24 * 7,
+            samesite = 'None',
+            secure = 'false'
+        )
+
+        return response
+    
+    except Exception as error :
+        current_app.logger.error(f'Error logging user out: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
     
 @user_bp.route('/info', methods = ['GET'])
 def get_user_info () :
