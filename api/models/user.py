@@ -23,7 +23,7 @@ class User (db.Model) :
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(30), nullable = False)
     email = db.Column(db.String(256), unique = True, nullable = False)
-    password = db.Column(db.String(128), nullable = False)
+    password = db.Column(db.LargeBinary, nullable = False)
     email_verified = db.Column(db.Boolean(), default = False, nullable = False)
     created_at = db.Column(db.TIMESTAMP(), nullable = False)
 
@@ -53,6 +53,7 @@ class User (db.Model) :
         self.password = self._hash_password(password)
         self.created_at = datetime.now(timezone.utc)
 
+
     def _hash_password (self, password) :
         '''
         Hash the password using bcrypt.
@@ -63,7 +64,7 @@ class User (db.Model) :
         Returns :
             str : the hashed password.
         '''
-        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        return bcrypt.hashpw(str(password).encode(), bcrypt.gensalt())
     
     def verify_password (self, password) :
         '''
@@ -75,4 +76,4 @@ class User (db.Model) :
         Returns :
             bool : True if the password matches, False otherwise.
         '''
-        return bcrypt.checkpw(password.encode('utf-8'), self.password)
+        return bcrypt.checkpw(str(password).encode(), self.password)
