@@ -46,10 +46,12 @@ def signup () :
 
         token = generate_jwt(new_user.id)
 
-        response = make_response(jsonify({
-            'message': 'User registered successfully',
-            'cartError': cartError
-        }), 201)
+        response = make_response(
+            jsonify({
+                'message': 'User registered successfully',
+                'cartError': cartError
+            }), 201
+        )
 
         response.set_cookie(
             'access_token',
@@ -78,24 +80,41 @@ def login () :
         Response : JSON response with a success message and any cart errors if applicable, or an error message in case of failure.
     '''
     try :
-        user = auth_user(request)
+        data = request.json
 
-        if not user :
+        user = User.query.filter_by(email = data.get('email')).first()
+    
+        if not user or not user.verify_password(data.get('password')) :
             return jsonify({
-                'message': 'User not found'
-            }), 404
+                'message': 'Invalid credientials'
+            }), 400
         
+        shopping_cart = request.json.get('localStorageCart')
+
+        if shopping_cart :
+            cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
         else :
-            shopping_cart = request.json.get('localStorageCart')
-            if shopping_cart :
-                cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
-            else :
-                cartError = None
-                
-            return jsonify({
+            cartError = None
+            
+        token = generate_jwt(user.id)
+
+        response = make_response(
+            jsonify({
                 'message': 'User logged in successfully',
                 'cartError': cartError
             }), 200
+        )
+
+        response.set_cookie(
+            'access_token',
+            value = token,
+            httponly = 'true',
+            max_age = 60 * 60 * 24 * 7,
+            samesite = 'None',
+            secure = 'false'
+        )
+
+        return response
         
     except Exception as error :
         current_app.logger.error(f'Error logging user in: {str(error)}')
