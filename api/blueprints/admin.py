@@ -1,11 +1,9 @@
 from flask import Blueprint, jsonify, request, current_app
-from firebase_admin import auth
-from datetime import datetime, timezone
 import os
 
 from ...database import db
 from ..utils.auth import auth_admin
-from ..models import Admin
+from ..models import Admin, Role
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -14,47 +12,31 @@ def admin_signup () :
     '''
     Registers a new admin user.
 
-    Retrieves the Firebase token from the request headers, decodes to get user's UID, and creates a new admin
-    record in the database.
-
     Request Body :
         - name (str) : name of admin.
+        - email (str) : email of admin.
+        - password (str) : password of admin.
         - pin (str) : PIN for admin account.
     
     Returns :
         Response : JSON response with admin's employee id and a success message or an error message.
     '''
     try :
-        # retrieve token
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        # decode to retrieve uid
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
+        data = request.json
 
-        if not uid :
-            return jsonify({
-                'error': 'Firebase error'
-            }), 400
-        
-        # setting admin status on firebase claims
-        # auth.set_custom_user_claims(uid, { 'admin': True })
-        
-
-        # creating admin
         admin_data = {
-            'name': request.json.get('name'),
-            'firebase_uid': uid,
-            'pin': request.json.get('pin'),
-            'created_at': datetime.now(timezone.utc)
+            'name': data.get('name'),
+            'email': data.get('email'),
+            'password': data.get('password'),
+            'pin': data.get('pin'),
         }
 
         new_admin = Admin(**admin_data)
 
         db.session.add(new_admin) 
         db.session.commit()
-        db.session.refresh(new_admin)
 
-        # returns generated employeeId
+        # returns generated employee_id
         return jsonify({
             'employeeId': new_admin.employee_id,
             'message': 'Admin registered successfully',
@@ -72,10 +54,11 @@ def admin_login () :
     '''
     Logs in an existing admin.
 
-    Authenticates an admin by matching provided employee ID and PIN, checking if PIN is valid and not expired.
+    Authenticates an admin by matching provided employee ID, password, PIN, checking if both the password and PIN is valid and not expired.
 
     Request Body :
         - employeeId (str) : requesting admin's employee ID.
+        - password (str) : request admin's password.
         - pin (str) : requesting admin's PIN.
 
     Returns :
