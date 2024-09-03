@@ -1,8 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
 from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials
 import stripe
 import os
 
@@ -14,7 +12,7 @@ def create_app () :
     Creates and configures the Flask application.
 
     Sets up the app, loads environment variables, configures third-party services
-    (Stripe, Firebase), and registers blueprints.
+    (Stripe), and registers blueprints.
     
     Returns :
         Flask: configured Flask app instance.
@@ -30,10 +28,6 @@ def create_app () :
     # initiailize stripe and secret API key
     stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
     webhook_secret = os.getenv('WEBHOOK_SECRET')
-
-    # initialize firebase 
-    cred = credentials.Certificate(app.config['FIREBASE_CREDENTIALS'])
-    firebase_admin.initialize_app(cred)
 
     # enable CORS
     CORS(app, supports_credentials = True, origins = '*')

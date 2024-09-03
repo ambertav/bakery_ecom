@@ -1,9 +1,7 @@
-from flask import Blueprint, jsonify, request, current_app
-from firebase_admin import auth
-from datetime import datetime, timezone
-
+from flask import Blueprint, jsonify, request, current_app, make_response
 
 from ...database import db
+from ..utils.token import generate_jwt, decode_jwt
 from ..utils.auth import auth_user, auth_admin
 from ..models import User
 
@@ -11,30 +9,27 @@ from .cart_item import create_item
 
 user_bp = Blueprint('user', __name__)
 
+
 @user_bp.route('/signup', methods = ['POST'])
 def signup () :
     '''
-    Handle user signup by verifying the Firebase token, creating a new user, and processing the shopping cart.
+    Handle user signup by creating a new user, processing the shopping cart, creating access token, and setting cookies.
 
     Returns :
         Response : JSON response with a success message and any cart errors if applicable, or an error message in case of failure.
     '''
     try :
-        # retrieve token
-        token = request.headers['Authorization'].replace('Bearer ', '')
-        # decode to retrieve uid
-        decoded_token = auth.verify_id_token(token)
-        uid = decoded_token['uid']
+        data = request.json
 
-        if not uid :
+        if data.get('password') != data.get('confirm_password') :
             return jsonify({
-                'error': 'Firebase error'
+                'error': 'Passwords do not match'
             }), 400
 
         user_data = {
-            'name': request.json.get('name'),
-            'firebase_uid': uid,
-            'created_at': datetime.now(timezone.utc)
+            'name': data.get('name'),
+            'email': data.get('email'),
+            'password': data.get('password'),
         }
 
         new_user = User(**user_data)
@@ -49,10 +44,25 @@ def signup () :
         else :
             cartError = None
 
-        return jsonify({
-            'message': 'User registered successfully',
-            'cartError': cartError
-        }), 201
+        token = generate_jwt(new_user.id)
+
+        response = make_response(
+            jsonify({
+                'message': 'User registered successfully',
+                'cartError': cartError
+            }), 201
+        )
+
+        response.set_cookie(
+            'access_token',
+            value = token,
+            httponly = 'true',
+            max_age = 60 * 60 * 24 * 7,
+            samesite = 'None',
+            secure = 'false'
+        )
+
+        return response
     
     except Exception as error :
         current_app.logger.error(f'Error registering user: {str(error)}')
@@ -70,30 +80,74 @@ def login () :
         Response : JSON response with a success message and any cart errors if applicable, or an error message in case of failure.
     '''
     try :
-        user = auth_user(request)
+        data = request.json
 
-        if not user :
+        user = User.query.filter_by(email = data.get('email')).first()
+    
+        if not user or not user.verify_password(data.get('password')) :
             return jsonify({
-                'message': 'User not found'
-            }), 404
+                'message': 'Invalid credientials'
+            }), 400
         
+        shopping_cart = request.json.get('localStorageCart')
+
+        if shopping_cart :
+            cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
         else :
-            shopping_cart = request.json.get('localStorageCart')
-            if shopping_cart :
-                cartError = process_shopping_cart(shopping_cart, user) # formats local storage cart to create cart item, returns errors if any
-            else :
-                cartError = None
-                
-            return jsonify({
+            cartError = None
+            
+        token = generate_jwt(user.id)
+
+        response = make_response(
+            jsonify({
                 'message': 'User logged in successfully',
                 'cartError': cartError
             }), 200
+        )
+
+        response.set_cookie(
+            'access_token',
+            value = token,
+            httponly = 'true',
+            max_age = 60 * 60 * 24 * 7,
+            samesite = 'None',
+            secure = 'false'
+        )
+
+        return response
         
     except Exception as error :
         current_app.logger.error(f'Error logging user in: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+@user_bp.route('/logout', methods = ['GET'])
+def logout () :
+    try :
+        response = make_response(jsonify({
+            'message': 'Successfully logged out'
+        }), 200)
+
+        # set new cookie that's expired and has and empty value 
+        response.set_cookie(
+            'access_token',
+            value = '',
+            httponly = 'true',
+            expires = 0,
+            max_age = 60 * 60 * 24 * 7,
+            samesite = 'None',
+            secure = 'false'
+        )
+
+        return response
+    
+    except Exception as error :
+        current_app.logger.error(f'Error logging user out: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+
     
 @user_bp.route('/info', methods = ['GET'])
 def get_user_info () :
@@ -120,8 +174,10 @@ def get_user_info () :
 
         # return info
         return jsonify({
-            'name': name, 
-            'isAdmin': is_admin
+            'user': {
+                'name': name,
+                'isAdmin': is_admin
+            }
         }), 200
     
     except Exception as error :
