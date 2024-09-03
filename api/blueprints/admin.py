@@ -110,34 +110,52 @@ def admin_login () :
             'error': 'Internal server error'
         }), 500
     
-@admin_bp.route('/update-pin/', methods = ['POST'])
-def admin_update_pin () :
+@admin_bp.route('/update-password/', methods = ['POST'])
+def admin_update_password () :
     '''
-    Updates the requesting admin's PIN.
+    Updates the requesting admin's password.
 
-    Validates the provided employee ID and old PIN, updates the PIN and sets a new expiration date.
+    Validates the provided employee ID, pin, and old password, updates the password and sets a new expiration date.
 
     Request Body :
+        - email (str) : requesting admin's email.
         - employeeId (str) : requesting admin's employee ID.
-        - oldPin (str) : requesting admin's PIN.
-        - pin (str) : new PIN to update.
+        - pin (str) : request admin's pin.
+        - oldPassword (str) : requesting admin's old password.
+        - password (str) : new password to update.
 
     Returns :
         Response : JSON response containing a sucess or error message.
     '''
     try :
-        # retrieve admin from firebase_uid
-        admin = auth_admin(request)
 
-        data = request.get_json()
+        data = request.json
 
-        # match employee id and old pin, then renew and update pin_expiration date
-        if str(admin.employee_id) == data.get('employeeId') and admin.renew_pin(data.get('oldPin'), data.get('pin')) :
+        admin = Admin.query.filter_by(employee_id = data.get('employeeId'), email = data.get('email')).first()
+
+        # match pin, then renew password and update password_expiration date
+        if admin and admin.check_pin(data.get('pin')) and admin.renew_password(data.get('oldPassword'), data.get('password')) :
             # commit changes to admin only if both conditions are true
             db.session.commit()
-            return jsonify({
-                'message': 'Pin was updated and admin logged in successfully',
-            }), 200
+
+            token = generate_jwt(admin.id)
+            response = make_response(
+                jsonify({
+                'message': 'Password was updated and admin logged in successfully',
+                }), 200
+            )
+
+            response.set_cookie(
+                'access_token',
+                value = token,
+                httponly = 'true',
+                max_age = 60 * 60 * 24 * 7,
+                samesite = 'None',
+                secure = 'false'
+            )
+
+            return response
+        
         else :
             db.session.rollback()
             return jsonify({
