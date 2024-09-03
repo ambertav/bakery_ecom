@@ -2,6 +2,7 @@ from .portion import Portion
 from .product import Product
 from .user import User
 from .admin import Admin
+from .admin import Role
 from .address import Address
 from .cart_item import Cart_Item
 from .order import Order
