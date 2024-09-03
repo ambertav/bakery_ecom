@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, make_response
 import os
 
 from ...database import db
+from ..utils.token import generate_jwt
 from ..utils.auth import auth_admin
 from ..models import Admin, Role
 
@@ -65,25 +66,43 @@ def admin_login () :
         Response : JSON response containing a sucess or error message.
     '''
     try :
-        # matching firebase_uid to retrieve admin
-        admin = auth_admin(request)
+        data = request.json
+
+        admin = Admin.query.filter_by(employee_id = data.get('employeeId')).first()
 
         # match employee id and pin
-        if str(admin.employee_id) == request.json.get('employeeId') and admin.check_pin(request.json.get('pin')) :
+        if admin and admin.verify_password(data.get('password')) and admin.check_pin(data.get('pin')) :
             # if pin is expired prompt to update pin
-            if not admin.is_pin_expired() :
-                return jsonify({
-                    'message': 'Admin logged in successfully',
-                }), 200
+            if not admin.is_password_expired() :
+
+                token = generate_jwt(admin.id)
+                response = make_response(
+                    jsonify({
+                        'message': 'Admin logged in successfully',
+                    }), 200
+                )
+
+                response.set_cookie(
+                    'access_token',
+                    value = token,
+                    httponly = 'true',
+                    max_age = 60 * 60 * 24 * 7,
+                    samesite = 'None',
+                    secure = 'false'
+                )
+
+                return response
+            
             else :
                 return jsonify({
-                    'message': 'Pin is expired, please renew pin',
+                    'message': 'Password is expired, please renew password',
                 }), 403
         else :
-            # if no match to employee id and pin, send failure and prompt to log out of firebase
+            # if no match to password and pin, send failure
             return jsonify({
                 'error': 'Invalid credientials',
             }), 401
+        
 
     except Exception as error :
         current_app.logger.error(f'Error logging admin in: {str(error)}')
