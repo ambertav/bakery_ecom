@@ -1,5 +1,6 @@
 from .portion import Portion
 from .product import Product
+from .product import Category
 from .user import User
 from .admin import Admin
 from .admin import Role
