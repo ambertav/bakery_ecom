@@ -171,12 +171,14 @@ def get_user_info () :
         # determining user's/admin's name and admin status
         name = admin.name if admin else user.name
         is_admin = bool(admin)
+        role = admin.role.value.lower() if admin else 'client'
 
         # return info
         return jsonify({
             'user': {
                 'name': name,
-                'isAdmin': is_admin
+                'isAdmin': is_admin,
+                'role': role,
             }
         }), 200
     

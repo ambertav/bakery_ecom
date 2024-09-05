@@ -5,8 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from ...database import db
 from ..utils.auth import auth_admin
-from ..models.product import Product, Category
-from ..models.portion import Portion
+from ..models import Product, Category, Portion, Role
 
 from ..utils.aws_s3 import s3_photo_upload
 
@@ -121,6 +120,11 @@ def create_product () :
                 'error': 'Authentication failed'
             }), 401
         
+        if admin.role != Role.SUPER :
+            return jsonify({
+                'error': 'Forbidden'
+            }), 403
+        
         data = request.get_json()
 
         product_data = {
@@ -179,6 +183,11 @@ def product_update (id) :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
+    
+        if admin.role != Role.SUPER or admin.role != Role.MANAGER :
+            return jsonify({
+                'error': 'Forbidden'
+        }), 403
         
         product = Product.query.get(id)
 
@@ -349,7 +358,7 @@ def product_update_inventory () :
                         # retrieve portion and update stock
                         portion = next((p for p in product.portions if p.id == int(portion_id)), None)
                         if portion :
-                            portion.update_stock(int(new_stock))
+                            portion.update_stock(portion.stock + int(new_stock))
                         
                         else :
                             raise ValueError(f'Portion with id {portion_id} was not found')
