@@ -3,8 +3,8 @@ import os
 
 from ...database import db
 from ..utils.token import generate_jwt
-from ..utils.auth import auth_admin
-from ..models import Admin, Role
+from ..utils.set_auth_cookies import set_tokens_in_cookies
+from ..models import Admin
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -75,21 +75,16 @@ def admin_login () :
             # if pin is expired prompt to update pin
             if not admin.is_password_expired() :
 
-                token = generate_jwt(admin.id)
+                access_token = generate_jwt(admin.id, 'admin', 15)
+                refresh_token = generate_jwt(admin.id, 'admin', 7 * 24 * 60)
+
                 response = make_response(
                     jsonify({
                         'message': 'Admin logged in successfully',
                     }), 200
                 )
 
-                response.set_cookie(
-                    'access_token',
-                    value = token,
-                    httponly = 'true',
-                    max_age = 60 * 60 * 24 * 7,
-                    samesite = 'None',
-                    secure = 'false'
-                )
+                response = set_tokens_in_cookies(response, access_token, refresh_token)
 
                 return response
             
@@ -128,7 +123,6 @@ def admin_update_password () :
         Response : JSON response containing a sucess or error message.
     '''
     try :
-
         data = request.json
 
         admin = Admin.query.filter_by(employee_id = data.get('employeeId'), email = data.get('email')).first()
@@ -138,21 +132,16 @@ def admin_update_password () :
             # commit changes to admin only if both conditions are true
             db.session.commit()
 
-            token = generate_jwt(admin.id)
+            access_token = generate_jwt(admin.id, 'admin', 15)
+            refresh_token = generate_jwt(admin.id, 'admin', 7 * 24 * 60)
+            
             response = make_response(
                 jsonify({
                 'message': 'Password was updated and admin logged in successfully',
                 }), 200
             )
 
-            response.set_cookie(
-                'access_token',
-                value = token,
-                httponly = 'true',
-                max_age = 60 * 60 * 24 * 7,
-                samesite = 'None',
-                secure = 'false'
-            )
+            response = set_tokens_in_cookies(response, access_token, refresh_token)
 
             return response
         
