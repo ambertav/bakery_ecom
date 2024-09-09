@@ -1,7 +1,10 @@
 from flask import Blueprint, jsonify, request, current_app, make_response
+import redis
+import jwt
 
 from ...database import db
-from ..utils.token import generate_jwt, decode_jwt
+from ...redis_service import get_redis_client
+from ..utils.token import generate_jwt, decode_jwt, get_time_until_jwt_expire
 from ..utils.set_auth_cookies import set_tokens_in_cookies
 from ..decorators import token_required
 from ..models import User, Admin
@@ -106,21 +109,40 @@ def login () :
 
 @user_bp.route('/logout', methods = ['GET'])
 def logout () :
-    try :
-        response = make_response(jsonify({
-            'message': 'Successfully logged out'
-        }), 200)
+    response = make_response(jsonify({
+        'message': 'Successfully logged out'
+    }), 200)
 
-        # delete cookie
+    try :
+        refresh_token = request.cookies.get('refresh_token')
+        if not refresh_token :
+            raise ValueError('No refresh token found')
+
+        # add buffer time of 5 minutes        
+        ttl = int(get_time_until_jwt_expire(refresh_token)) + 300
+
+        if ttl > 0 :
+            redis_client = get_redis_client()
+            redis_client.sadd('blacklist:tokens', refresh_token)
+            redis_client.expire('blacklist:tokens', ttl)
+    
+    except redis.RedisError as re :
+        current_app.logger.error(f'Redis error: {str(re)}')
+        response = make_response(jsonify({
+            'error': 'Redis error'
+        }), 500)
+
+    except Exception as error :
+        current_app.logger.error(f'Error logging user out: {str(error)}')
+        response = make_response(jsonify({
+            'error': 'Internal server error'
+        }), 500)
+
+    finally :
+        # delete cookies
         response = set_tokens_in_cookies(response, '', '')
 
         return response
-    
-    except Exception as error :
-        current_app.logger.error(f'Error logging user out: {str(error)}')
-        return jsonify({
-            'error': 'Internal server error'
-        }), 500
 
     
 @user_bp.route('/info', methods = ['GET'])
@@ -158,15 +180,19 @@ def get_user_info () :
         }), 500
     
 @user_bp.route('/refresh', methods = ['GET'])
-def refresh_tokens () :
+def refresh_authentication_tokens () :
     try :
         token = request.cookies.get('refresh_token')
 
         if not token :
-            print(f'no token: {token}')
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
+        
+        redis_client = get_redis_client()
+
+        if redis_client.sismember('blacklist:tokens', token) :
+            raise jwt.InvalidTokenError
         
         payload = decode_jwt(token)
 
@@ -203,6 +229,11 @@ def refresh_tokens () :
 
         return response
 
+    except jwt.InvalidTokenError :
+        return jsonify({
+            'error': 'Invalid token'
+        }), 401
+    
     except Exception as error :
         current_app.logger.error(f'Error refreshing tokens: {str(error)}')
         return jsonify({

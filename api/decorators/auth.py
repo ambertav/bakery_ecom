@@ -10,17 +10,17 @@ secret_key = os.getenv('SECRET_KEY')
 
 def token_required (f) :
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated_function(*args, **kwargs) :
         token = request.cookies.get('access_token')
 
-        if not token:
+        if not token :
             return jsonify({
                 'error': 'Authentication required'
             }), 401
         
         user, admin = None, None
 
-        try:
+        try :
             payload = decode_jwt(token)
 
             id = payload.get('sub')
@@ -44,12 +44,12 @@ def token_required (f) :
                     'error': 'User or Admin not found'
                 }), 401
 
-        except jwt.ExpiredSignatureError:
+        except jwt.ExpiredSignatureError :
             return jsonify({
                 'error': 'Token expired'
             }), 401
         
-        except jwt.InvalidTokenError:
+        except jwt.InvalidTokenError :
             return jsonify({
                 'error': 'Invalid token'
             }), 401
