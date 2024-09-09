@@ -3,7 +3,7 @@ import redis
 import jwt
 
 from ...database import db
-from ...redis_service import get_redis_client
+from ..utils.redis_service import store_token, is_token_blacklisted
 from ..utils.token import generate_jwt, decode_jwt, get_time_until_jwt_expire
 from ..utils.set_auth_cookies import set_tokens_in_cookies
 from ..decorators import token_required
@@ -122,9 +122,7 @@ def logout () :
         ttl = int(get_time_until_jwt_expire(refresh_token)) + 300
 
         if ttl > 0 :
-            redis_client = get_redis_client()
-            redis_client.sadd('blacklist:tokens', refresh_token)
-            redis_client.expire('blacklist:tokens', ttl)
+            store_token(refresh_token, ttl)
     
     except redis.RedisError as re :
         current_app.logger.error(f'Redis error: {str(re)}')
@@ -189,9 +187,8 @@ def refresh_authentication_tokens () :
                 'error': 'Authentication failed'
             }), 401
         
-        redis_client = get_redis_client()
 
-        if redis_client.sismember('blacklist:tokens', token) :
+        if is_token_blacklisted(token) :
             raise jwt.InvalidTokenError
         
         payload = decode_jwt(token)
@@ -200,8 +197,6 @@ def refresh_authentication_tokens () :
         role =  payload.get('role')
 
         if not id or not role :
-            print(f'heres the id: {id}')
-            print(f'heres the role: {role}')
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
@@ -215,6 +210,11 @@ def refresh_authentication_tokens () :
             return jsonify({
                 'error': 'Forbidden',
             }), 403
+        
+        ttl = int(get_time_until_jwt_expire(token)) + 300
+
+        if ttl > 0 :
+            store_token(token, ttl)
         
         access_token = generate_jwt(id, payload.get('role'), 15)
         refresh_token = generate_jwt(id, payload.get('role'), 7 * 24 * 60)

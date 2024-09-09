@@ -12,7 +12,7 @@ def set_tokens_in_cookies(response, access_token, refresh_token):
         'access_token',
         value = access_token,
         httponly = 'true',
-        max_age = 15 * 60,
+        max_age = 15 * 60 if access_token else 0,
         samesite = 'None',
         secure = 'false'
     )
@@ -21,7 +21,7 @@ def set_tokens_in_cookies(response, access_token, refresh_token):
         'refresh_token',
         value = refresh_token,
         httponly = 'true',
-        max_age = 7 * 24 * 60 * 60,
+        max_age = 7 * 24 * 60 * 60 if refresh_token else 0,
         samesite = 'None',
         secure = 'false'
     )

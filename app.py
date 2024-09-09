@@ -6,7 +6,7 @@ import os
 
 from .config import config
 from .database import init_db
-from .redis_service import init_redis
+from .redis_config import init_redis
 
 def create_app () : 
     '''
