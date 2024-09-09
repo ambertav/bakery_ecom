@@ -1,12 +1,13 @@
 from flask import Blueprint, jsonify, request, current_app
 
 from ...database import db
-from ..utils.auth import auth_user
+from ..decorators import token_required
 from ..models import Address
 
 address_bp = Blueprint('address', __name__)
 
 @address_bp.route('/', methods = ['GET'])
+@token_required
 def get_addresses () :
     '''
     Retrieves the addressed associated with the authenticated user.
@@ -18,12 +19,7 @@ def get_addresses () :
         Response : JSON response containing a list of address dictionaries or an error message
     '''
     try :
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
 
         is_default = request.args.get('default', '').lower() == 'true'
 
@@ -47,6 +43,7 @@ def get_addresses () :
         }), 500
     
 @address_bp.route('/default/<int:id>', methods = ['PUT'])
+@token_required
 def update_default (id) :
     '''
     Updates the default address for the authenticated user.
@@ -61,14 +58,8 @@ def update_default (id) :
         Response : JSON response indicating success or an error message.
     '''
     try :
-        # retrieve token and auth user
-        user = auth_user(request)
+        user = request.user
 
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
-        
         set_default = user.addresses.filter_by(id = id).first()
 
         if set_default : # if the address to set as default was found
@@ -95,6 +86,7 @@ def update_default (id) :
         }), 500
     
 @address_bp.route('/<int:id>/delete', methods = ['DELETE'])
+@token_required
 def delete (id) :
     '''
     Deletes an address for authenticated user.
@@ -108,13 +100,7 @@ def delete (id) :
         Response : JSON response indicating success or an error message.
     '''
     try : 
-        # retrieve token and auth user
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
         
         deleted_address = user.addresses.filter_by(id = id).first()
 

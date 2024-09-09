@@ -1,9 +1,13 @@
 from flask import Blueprint, jsonify, request, current_app, make_response
+import redis
+import jwt
 
 from ...database import db
-from ..utils.token import generate_jwt, decode_jwt
-from ..utils.auth import auth_user, auth_admin
-from ..models import User
+from ..utils.redis_service import store_token, is_token_blacklisted
+from ..utils.token import generate_jwt, decode_jwt, get_time_until_jwt_expire
+from ..utils.set_auth_cookies import set_tokens_in_cookies
+from ..decorators import token_required
+from ..models import User, Admin
 
 from .cart_item import create_item
 
@@ -44,23 +48,10 @@ def signup () :
         else :
             cartError = None
 
-        token = generate_jwt(new_user.id)
+        access_token = generate_jwt(new_user.id, 'user', 15)
+        refresh_token = generate_jwt(new_user.id, 'user', 7 * 24 * 60)
 
-        response = make_response(
-            jsonify({
-                'message': 'User registered successfully',
-                'cartError': cartError
-            }), 201
-        )
-
-        response.set_cookie(
-            'access_token',
-            value = token,
-            httponly = 'true',
-            max_age = 60 * 60 * 24 * 7,
-            samesite = 'None',
-            secure = 'false'
-        )
+        response = set_tokens_in_cookies(response, access_token, refresh_token)
 
         return response
     
@@ -96,7 +87,8 @@ def login () :
         else :
             cartError = None
             
-        token = generate_jwt(user.id)
+        access_token = generate_jwt(user.id, 'user', 15)
+        refresh_token = generate_jwt(user.id, 'user', 7 * 24 * 60)
 
         response = make_response(
             jsonify({
@@ -105,14 +97,7 @@ def login () :
             }), 200
         )
 
-        response.set_cookie(
-            'access_token',
-            value = token,
-            httponly = 'true',
-            max_age = 60 * 60 * 24 * 7,
-            samesite = 'None',
-            secure = 'false'
-        )
+        response = set_tokens_in_cookies(response, access_token, refresh_token)
 
         return response
         
@@ -124,32 +109,42 @@ def login () :
 
 @user_bp.route('/logout', methods = ['GET'])
 def logout () :
+    response = make_response(jsonify({
+        'message': 'Successfully logged out'
+    }), 200)
+
     try :
-        response = make_response(jsonify({
-            'message': 'Successfully logged out'
-        }), 200)
+        refresh_token = request.cookies.get('refresh_token')
+        if not refresh_token :
+            raise ValueError('No refresh token found')
 
-        # set new cookie that's expired and has and empty value 
-        response.set_cookie(
-            'access_token',
-            value = '',
-            httponly = 'true',
-            expires = 0,
-            max_age = 60 * 60 * 24 * 7,
-            samesite = 'None',
-            secure = 'false'
-        )
+        # add buffer time of 5 minutes        
+        ttl = int(get_time_until_jwt_expire(refresh_token)) + 300
 
-        return response
+        if ttl > 0 :
+            store_token(refresh_token, ttl)
     
+    except redis.RedisError as re :
+        current_app.logger.error(f'Redis error: {str(re)}')
+        response = make_response(jsonify({
+            'error': 'Redis error'
+        }), 500)
+
     except Exception as error :
         current_app.logger.error(f'Error logging user out: {str(error)}')
-        return jsonify({
+        response = make_response(jsonify({
             'error': 'Internal server error'
-        }), 500
+        }), 500)
+
+    finally :
+        # delete cookies
+        response = set_tokens_in_cookies(response, '', '')
+
+        return response
 
     
 @user_bp.route('/info', methods = ['GET'])
+@token_required
 def get_user_info () :
     '''
     Retrieve user or admin status and information.
@@ -159,14 +154,8 @@ def get_user_info () :
     '''
     try :
         # authenticate for both user and admin
-        user = auth_user(request)
-        admin = auth_admin(request)
-
-        # if neither user nor admin, return 404
-        if not user and not admin :
-            return jsonify({
-                'message': 'User not found'
-            }), 404
+        user = request.user
+        admin = request.admin
 
         # determining user's/admin's name and admin status
         name = admin.name if admin else user.name
@@ -184,6 +173,69 @@ def get_user_info () :
     
     except Exception as error :
         current_app.logger.error(f'Error retrieving user info: {str(error)}')
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
+    
+@user_bp.route('/refresh', methods = ['GET'])
+def refresh_authentication_tokens () :
+    try :
+        token = request.cookies.get('refresh_token')
+
+        if not token :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+
+        if is_token_blacklisted(token) :
+            raise jwt.InvalidTokenError
+        
+        payload = decode_jwt(token)
+
+        id = payload.get('sub')
+        role =  payload.get('role')
+
+        if not id or not role :
+            return jsonify({
+                'error': 'Authentication failed'
+            }), 401
+        
+        if role == 'user' :
+            user = User.query.get(id)
+        elif role == 'admin' :
+            admin = Admin.query.get(id)
+        
+        if not user and not admin :
+            return jsonify({
+                'error': 'Forbidden',
+            }), 403
+        
+        ttl = int(get_time_until_jwt_expire(token)) + 300
+
+        if ttl > 0 :
+            store_token(token, ttl)
+        
+        access_token = generate_jwt(id, payload.get('role'), 15)
+        refresh_token = generate_jwt(id, payload.get('role'), 7 * 24 * 60)
+
+        response = make_response(
+            jsonify({
+                'message': 'Tokens refreshed successfully',
+            }), 200
+        )
+
+        response = set_tokens_in_cookies(response, access_token, refresh_token)
+
+        return response
+
+    except jwt.InvalidTokenError :
+        return jsonify({
+            'error': 'Invalid token'
+        }), 401
+    
+    except Exception as error :
+        current_app.logger.error(f'Error refreshing tokens: {str(error)}')
         return jsonify({
             'error': 'Internal server error'
         }), 500

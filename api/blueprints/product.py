@@ -4,7 +4,7 @@ from sqlalchemy.orm import joinedload
 
 
 from ...database import db
-from ..utils.auth import auth_admin
+from ..decorators import token_required
 from ..models import Product, Category, Portion, Role
 
 from ..utils.aws_s3 import s3_photo_upload
@@ -98,6 +98,7 @@ def product_index () :
 
 
 @product_bp.route('/create', methods = ['POST'])
+@token_required
 def create_product () :
     '''
     Creates a new product along with its associated portions.
@@ -112,13 +113,7 @@ def create_product () :
     - On error, returns a 500 status with an error message.
     '''
     try :
-        # retrieve token and auth user
-        admin = auth_admin(request)
-
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
         
         if admin.role != Role.SUPER :
             return jsonify({
@@ -162,6 +157,7 @@ def create_product () :
     
 
 @product_bp.route('/<int:id>/update', methods = ['PUT'])
+@token_required
 def product_update (id) :
     '''
     Updates the attributes of an existing product.
@@ -176,13 +172,7 @@ def product_update (id) :
     - On error, returns a 500 status with an error message.
     '''
     try :
-        # retrieve token and auth user
-        admin = auth_admin(request)
-
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
     
         if admin.role != Role.SUPER or admin.role != Role.MANAGER :
             return jsonify({
@@ -213,6 +203,7 @@ def product_update (id) :
     
 
 @product_bp.route('<int:id>/upload_photo', methods = ['POST'])
+@token_required
 def product_upload_photo (id) :
     '''
     Uploads a photo for the specified product and updates the product's image URL.
@@ -227,6 +218,8 @@ def product_upload_photo (id) :
     - On error, returns a 500 status with an error message.
     '''
     try :
+        admin = request.admin
+
         if 'image' not in request.files:
             return jsonify({
                 'error': 'No image file found in request'
@@ -258,6 +251,7 @@ def product_upload_photo (id) :
 
 
 @product_bp.route('/inventory/generate-report', methods = ['GET'])
+@token_required
 def product_generate_inventory_report () :
     '''
     Generates a report of products that need inventory restocking based on 
@@ -272,12 +266,7 @@ def product_generate_inventory_report () :
     '''
     try :
         # retrieve token and auth user
-        admin = auth_admin(request)
-
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
         
         low_stock_products = (Product.query
             .join(Product.portions)
@@ -325,6 +314,7 @@ def product_generate_inventory_report () :
 
 
 @product_bp.route('/inventory/update', methods = ['PUT'])
+@token_required
 def product_update_inventory () :
     '''
     Updates the stock of portions for multiple products based on the input data.
@@ -338,13 +328,7 @@ def product_update_inventory () :
     - On error, returns a 500 status with an error message.
     '''
     try :
-        admin = auth_admin(request)
-
-        # restrict access to only admin users
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
 
         data = request.get_json()
 

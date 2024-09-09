@@ -6,7 +6,7 @@ import json
 import datetime
 
 from ...database import db
-from ..utils.auth import auth_user, auth_admin
+from ..decorators import token_required
 from ..models import Address, Cart_Item, Order
 from ..models.order import Order_Status, Pay_Status, Deliver_Method
 
@@ -15,6 +15,7 @@ webhook_secret = os.getenv('WEBHOOK_SECRET')
 order_bp = Blueprint('order', __name__)
 
 @order_bp.route('/', methods = ['GET'])
+@token_required
 def order_history_index () :
     '''
     Retrieves paginated list of orders for authenticated user.
@@ -25,13 +26,7 @@ def order_history_index () :
         Response : JSON response containing list of order dictionaries, total pages, and the current page, or error message.
     '''
     try :
-        # retrieve token and auth user
-        user = auth_user(request)
-
-        if user is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
                 
         page = request.args.get('page', 1, type = int)
         
@@ -68,6 +63,7 @@ def order_history_index () :
     
 
 @order_bp.route('/<int:id>', methods = ['GET'])
+@token_required
 def show_order (id) :
     '''
     Retrieves details for a specific order by ID for the authenticated user.
@@ -76,12 +72,7 @@ def show_order (id) :
         Response : JSON response with order details or an error message if there an error occurred or if order is not found.
     '''
     try :
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
         
         order = Order.query.filter_by(id = id, user_id = user.id).first()
 
@@ -102,6 +93,7 @@ def show_order (id) :
 
 
 @order_bp.route('/fulfillment/pending/', methods = ['GET'])
+@token_required
 def order_fulfillment_get_pending () :
     '''
     Retrieves a paginated list of pending orders for admins.
@@ -111,14 +103,15 @@ def order_fulfillment_get_pending () :
     Returns :
         Response : JSON response with pending orders or error message.
     '''
-    # user auth done in get_fulfillment_orders_by_status function
+    admin = request.admin
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
     search = request.args.get('search')
-    return get_fulfillment_orders_by_status('PENDING', page, delivery_method, search)
+    return get_fulfillment_orders_by_status(admin,'PENDING', page, delivery_method, search)
     
 
 @order_bp.route('/fulfillment/in-progress/', methods = ['GET'])
+@token_required
 def order_fulfillment_get_in_progress () :
     '''
     Retrieves a paginated list of orders in progress for admins.
@@ -128,14 +121,14 @@ def order_fulfillment_get_in_progress () :
     Returns :
         Response : JSON response with in-progress orders or error message.
     '''
-    # user auth done in get_fulfillment_orders_by_status function
+    admin = request.admin
     page = request.args.get('page', 1, type = int)
     delivery_method = request.args.get('delivery-method')
     search = request.args.get('search')
-    return get_fulfillment_orders_by_status('IN_PROGRESS', page, delivery_method, search)
+    return get_fulfillment_orders_by_status(admin, 'IN_PROGRESS', page, delivery_method, search)
 
 
-def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
+def get_fulfillment_orders_by_status (admin, status, page, delivery_method, search) :
     '''
     Retrieves a paginated list of orders based on their fulfillment status for admins.
 
@@ -151,14 +144,6 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
         Response : JSON response with list of order dictionaries, total pages, and the current page, or error message.
     '''
     try :
-        # authentication and authorization check
-        admin = auth_admin(request)
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
-
-
         # if there is a search param, search by the specific id and return
         if search :
             # retrieve order
@@ -227,6 +212,7 @@ def get_fulfillment_orders_by_status (status, page, delivery_method, search) :
         }), 500
 
 @order_bp.route('/fulfillment/set-in-progress/', methods = ['PUT'])
+@token_required
 def start_orders_and_assign_admin_tasks () :
     '''
     Starts one or multiple orders and assigns associated tasks to the authenticated admin.
@@ -238,12 +224,7 @@ def start_orders_and_assign_admin_tasks () :
         Response : JSON response indicating success or error message.
     '''
     try :
-        # authentication and authorization check
-        admin = auth_admin(request)
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
 
         try :
             # extract the order ids
@@ -274,6 +255,7 @@ def start_orders_and_assign_admin_tasks () :
         }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-pending/', methods = ['PUT'])
+@token_required
 def return_order_to_pending (id) :
     '''
     Returns a specific order to pending status and unassigns the associated admin.
@@ -286,12 +268,7 @@ def return_order_to_pending (id) :
         Response : JSON response indicating success or error message.
     '''
     try :
-        # authentication and authorization check
-        admin = auth_admin(request)
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
         
         # query for order
         order = Order.query.get(id)
@@ -320,6 +297,7 @@ def return_order_to_pending (id) :
         }), 500
 
 @order_bp.route('/fulfillment/<int:id>/set-complete/', methods = ['PUT'])
+@token_required
 def complete_order_fulfillment (id) :
     '''
     Marks a specific order to as completed and finalizes the associated task.
@@ -332,12 +310,7 @@ def complete_order_fulfillment (id) :
         Response : JSON response indicating success or error message.
     '''
     try :
-        # authentication and authorization check
-        admin = auth_admin(request)
-        if admin is None :
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        admin = request.admin
         
         # query for order
         order = Order.query.get(id)
@@ -366,6 +339,7 @@ def complete_order_fulfillment (id) :
         }), 500
 
 @order_bp.route('/create-checkout-session', methods = ['POST'])
+@token_required
 def create_checkout_session() :
     '''
     Creates a Stripe checkout session for the authenticated user based on cart information.
@@ -379,13 +353,7 @@ def create_checkout_session() :
     Returns :
         Response : JSON response with the Stripe checkout URL or error message.
     '''
-    # retrieve token and auth user
-    user = auth_user(request)
-
-    if user is None :
-        return jsonify({
-            'error': 'Authentication failed'
-        }), 401
+    user = request.user
     
     cart = request.json.get('cart')
     method = request.json.get('method')

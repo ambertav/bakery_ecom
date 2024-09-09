@@ -1,13 +1,14 @@
 from flask import Blueprint, jsonify, request, current_app
 
 from ...database import db
-from ..utils.auth import auth_user
+from ..decorators import token_required
 
 from ..models import Product, Cart_Item
 
 cart_item_bp = Blueprint('cart_item', __name__)
 
 @cart_item_bp.route('/', methods = ['GET'])
+@token_required
 def view_cart() :
     '''
     Retrieves the user's shopping cart.
@@ -19,12 +20,7 @@ def view_cart() :
         if no items are present, or an error message if an error occurs.
     '''
     try :
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
 
         cart_items = Cart_Item.query.filter_by(user_id = user.id, ordered = False).all()
 
@@ -44,6 +40,7 @@ def view_cart() :
         }), 500
 
 @cart_item_bp.route('/<int:id>/delete', methods = ['DELETE'])
+@token_required
 def delete_cart_item (id) :
     '''
     Deletes a specific item from the user's associated cart_items using the ID
@@ -53,12 +50,7 @@ def delete_cart_item (id) :
         error message if there is an error or the item is not found.
     '''
     try :
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
 
         cart_item = Cart_Item.query.filter_by(id = id, user_id = user.id).first()
 
@@ -81,6 +73,7 @@ def delete_cart_item (id) :
         }), 500
 
 @cart_item_bp.route('/<int:id>/update', methods = ['PUT'])
+@token_required
 def update_quantity (id) :
     '''
     Updates the quantity of a specific item associated with the user.
@@ -95,12 +88,7 @@ def update_quantity (id) :
         message if there is an error, if the cart_item is not found, or if the quantity is invalid. 
     '''
     try :
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
         
         data = request.get_json()
 
@@ -135,6 +123,7 @@ def update_quantity (id) :
         }), 500
 
 @cart_item_bp.route('/add', methods = ['POST'])
+@token_required
 def add_to_cart () :
     '''
     Adds a new cart_item to the user's cart. 
@@ -149,13 +138,7 @@ def add_to_cart () :
         or an error message if there is an error or if the corresponding product is not found.
     '''
     try :
-        # retrieve token
-        user = auth_user(request)
-
-        if user is None:
-            return jsonify({
-                'error': 'Authentication failed'
-            }), 401
+        user = request.user
         
         data = request.get_json()
 

@@ -6,6 +6,7 @@ import os
 
 from .config import config
 from .database import init_db
+from .redis_config import init_redis
 
 def create_app () : 
     '''
@@ -26,13 +27,14 @@ def create_app () :
     app.config.from_object(config[env])
 
     # initiailize stripe and secret API key
-    stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
-    webhook_secret = os.getenv('WEBHOOK_SECRET')
+    stripe.api_key = app.config['STRIPE_API_KEY']
+    webhook_secret = app.config['WEBHOOK_SECRET']
 
     # enable CORS
     CORS(app, supports_credentials = True, origins = '*')
     
     init_db(app)
+    init_redis(app.config['REDIS_URL'])
 
     # import blueprints 
     from .api.blueprints.product import product_bp
