@@ -53,7 +53,7 @@ class Product (db.Model) :
     # defines relationship
     portions = db.relationship('Portion', back_populates = 'product', cascade = 'all, delete-orphan')
 
-    def __init__ (self, name, description, category, image) :
+    def __init__ (self, name, description, category) :
         '''
         Initializes a new product instance.
 
@@ -66,7 +66,7 @@ class Product (db.Model) :
         self.name = name
         self.description = description
         self.category = Category(category)
-        self.image = image or 'https://example.com/default_image.jpg'
+        self.image = 'https://example.com/default_image.jpg'
 
     def create_portions (self, price) :
         '''

@@ -120,10 +120,15 @@ def create_product () :
                 'error': 'Forbidden'
             }), 403
         
-        data = request.get_json()
+        data = request.form
+
+        if 'image' not in request.files:
+            return jsonify({
+                'error': 'No image file found in request'
+            }), 400
 
         product_data = {
-            key: data.get(key) for key in ['name', 'description', 'category', 'image']
+            key: data.get(key) for key in ['name', 'description', 'category']
         }
 
         try :
@@ -136,13 +141,18 @@ def create_product () :
             for portion in portions :
                 db.session.add(portion)
 
+            try :
+                file = request.files.get('image')
+                image_url = s3_photo_upload(file, str(new_product.id))
+                new_product.update_attributes({ 'image': image_url })
+
+            except Exception as error :
+                raise error
+
             db.session.commit()
-            db.session.refresh(new_product)
 
-
-        except Exception as error :
-            db.session.rollback()
-            raise error
+        except Exception :
+            raise
 
         return jsonify({
             'product': new_product.as_dict(),
@@ -150,6 +160,7 @@ def create_product () :
         }), 201
     
     except Exception as error :
+        db.session.rollback()
         current_app.logger.error(f'Error creating product: {str(error)}')
         return jsonify({
             'error': error
@@ -174,7 +185,7 @@ def product_update (id) :
     try :
         admin = request.admin
     
-        if admin.role != Role.SUPER or admin.role != Role.MANAGER :
+        if admin.role == Role.GENERAL :
             return jsonify({
                 'error': 'Forbidden'
         }), 403
@@ -182,7 +193,18 @@ def product_update (id) :
         product = Product.query.get(id)
 
         if product :
-            product.update_attributes(request.get_json())
+            data = { key : value for (key, value) in request.form.items() if key != 'portions' }
+
+            if 'image' in request.files :
+                try :
+                    file = request.files.get('image')
+                    image_url = s3_photo_upload(file, str(product.id))
+                    data['image'] = image_url
+
+                except Exception :
+                    raise
+
+            product.update_attributes(data)
             db.session.commit()
 
             return jsonify({
@@ -197,54 +219,6 @@ def product_update (id) :
 
     except Exception as error :
         current_app.logger.error(f'Error updating product: {str(error)}')
-        return jsonify({
-            'error': error
-        }), 500
-    
-
-@product_bp.route('<int:id>/upload_photo', methods = ['POST'])
-@token_required
-def product_upload_photo (id) :
-    '''
-    Uploads a photo for the specified product and updates the product's image URL.
-
-    Request :
-    - Multipart/form-data containing the image file.
-
-    Returns :
-    - JSON response with a success message when the image is uploaded successfully.
-    - On product not found, returns a 404 status with an error message.
-    - On missing image file, returns a 400 status with an error message.
-    - On error, returns a 500 status with an error message.
-    '''
-    try :
-        admin = request.admin
-
-        if 'image' not in request.files:
-            return jsonify({
-                'error': 'No image file found in request'
-            }), 400
-        
-        product = Product.query.get(id)
-
-        if not product :
-            return jsonify({
-                'error': 'Product not found'
-            }), 404
-
-        file = request.files.get('image')
-        image_url = s3_photo_upload(file, str(product.id))
-
-        if image_url :
-            product.update_attributes({'image': image_url})
-            db.session.commit()
-
-            return jsonify({
-                'message': 'Image uploaded successfully',
-            }), 200
-
-    except Exception as error :
-        current_app.logger.error(f'Error uploading product image: {str(error)}')
         return jsonify({
             'error': error
         }), 500

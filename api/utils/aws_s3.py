@@ -82,7 +82,7 @@ def s3_photo_upload (file, product_id) :
         raise ValueError('Invalid file type')
     
     # generate file name based on product ID
-    file_name = f'{product_id}.{file_type}'
+    file_name = f'products/{product_id}.{file_type}'
 
     # compress and resize image
     resized_file = compress_and_resize_image(file.read())
