@@ -53,7 +53,7 @@ class Product (db.Model) :
     # defines relationship
     portions = db.relationship('Portion', back_populates = 'product', cascade = 'all, delete-orphan')
 
-    def __init__ (self, name, description, category, image) :
+    def __init__ (self, name, description, category) :
         '''
         Initializes a new product instance.
 
@@ -66,7 +66,7 @@ class Product (db.Model) :
         self.name = name
         self.description = description
         self.category = Category(category)
-        self.image = image or 'https://example.com/default_image.jpg'
+        self.image = 'https://example.com/default_image.jpg'
 
     def create_portions (self, price) :
         '''
@@ -96,6 +96,13 @@ class Product (db.Model) :
             data (dict) : dictionary where keys are product attribute names and values are new values for those attributes
         '''
         for key, value in data.items() :
+            # handles specific case for price being attached to portions
+            if key == 'price' :
+                whole_portion = next((item for item in self.portions if item.size == Portion_Size.WHOLE), None)
+                if whole_portion.price != value :
+                    for portion in self.portions :
+                        portion.calculate_price(value)
+
             if hasattr(self, key) and getattr(self, key) != value :
                 setattr(self, key, value)
     
