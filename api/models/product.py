@@ -96,6 +96,13 @@ class Product (db.Model) :
             data (dict) : dictionary where keys are product attribute names and values are new values for those attributes
         '''
         for key, value in data.items() :
+            # handles specific case for price being attached to portions
+            if key == 'price' :
+                whole_portion = next((item for item in self.portions if item.size == Portion_Size.WHOLE), None)
+                if whole_portion.price != value :
+                    for portion in self.portions :
+                        portion.calculate_price(value)
+
             if hasattr(self, key) and getattr(self, key) != value :
                 setattr(self, key, value)
     

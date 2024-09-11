@@ -65,9 +65,9 @@ class Portion (db.Model) :
         self.stock = stock
         self.optimal_stock = optimal_stock
 
-        self._calculate_price(price)
+        self.calculate_price(price)
 
-    def _calculate_price (self, price) :
+    def calculate_price (self, price) :
         '''
         Calculates and sets the price of the portion based on its size.
 
