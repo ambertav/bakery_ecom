@@ -187,7 +187,6 @@ def refresh_authentication_tokens () :
                 'error': 'Authentication failed'
             }), 401
         
-
         if is_token_blacklisted(token) :
             raise jwt.InvalidTokenError
         
@@ -200,6 +199,8 @@ def refresh_authentication_tokens () :
             return jsonify({
                 'error': 'Authentication failed'
             }), 401
+        
+        user, admin = None, None
         
         if role == 'user' :
             user = User.query.get(id)
