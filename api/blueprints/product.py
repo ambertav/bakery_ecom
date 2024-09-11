@@ -114,12 +114,12 @@ def create_product () :
     '''
     try :
         admin = request.admin
-        
+            
         if admin.role != Role.SUPER :
             return jsonify({
                 'error': 'Forbidden'
             }), 403
-        
+            
         data = request.form
 
         if 'image' not in request.files:
@@ -131,28 +131,18 @@ def create_product () :
             key: data.get(key) for key in ['name', 'description', 'category']
         }
 
-        try :
-            new_product = Product(**product_data)
-            db.session.add(new_product)
-            db.session.flush()
+        new_product = Product(**product_data)
+        db.session.add(new_product)
+        db.session.flush()
 
-            portions = new_product.create_portions(data.get('price'))
+        portions = new_product.create_portions(data.get('price'))
+        db.session.bulk_save_objects(portions)
 
-            for portion in portions :
-                db.session.add(portion)
+        file = request.files.get('image')
+        image_url = s3_photo_upload(file, str(new_product.id))
+        new_product.update_attributes({ 'image': image_url })
 
-            try :
-                file = request.files.get('image')
-                image_url = s3_photo_upload(file, str(new_product.id))
-                new_product.update_attributes({ 'image': image_url })
-
-            except Exception as error :
-                raise error
-
-            db.session.commit()
-
-        except Exception :
-            raise
+        db.session.commit()
 
         return jsonify({
             'product': new_product.as_dict(),
@@ -192,30 +182,25 @@ def product_update (id) :
         
         product = Product.query.get(id)
 
-        if product :
-            data = { key : value for (key, value) in request.form.items() if key != 'portions' }
-
-            if 'image' in request.files :
-                try :
-                    file = request.files.get('image')
-                    image_url = s3_photo_upload(file, str(product.id))
-                    data['image'] = image_url
-
-                except Exception :
-                    raise
-
-            product.update_attributes(data)
-            db.session.commit()
-
-            return jsonify({
-                'product': product.as_dict(),
-                'message': 'Product updated successfully'
-            }), 200
-        
-        else :
+        if not product :
             return jsonify({
                 'error': 'Product not found'
             }), 404
+        
+        data = { key : value for (key, value) in request.form.items() if key != 'portions' }
+
+        if 'image' in request.files :
+            file = request.files.get('image')
+            image_url = s3_photo_upload(file, str(product.id))
+            data['image'] = image_url
+
+        product.update_attributes(data)
+        db.session.commit()
+
+        return jsonify({
+            'product': product.as_dict(),
+            'message': 'Product updated successfully'
+        }), 200
 
     except Exception as error :
         current_app.logger.error(f'Error updating product: {str(error)}')
