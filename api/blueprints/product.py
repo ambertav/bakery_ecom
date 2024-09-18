@@ -5,7 +5,8 @@ from sqlalchemy.orm import joinedload
 
 from ...database import db
 from ..decorators import token_required
-from ..models import Product, Category, Portion, Role
+from ..utils.redis_service import retrieve_products, store_products
+from ..models import Product, Category, Portion, Role, Portion_Size
 
 from ..utils.aws_s3 import s3_photo_upload
 
@@ -36,6 +37,15 @@ def product_index () :
         search = request.args.get('search')
         sort = request.args.get('sort')
 
+        cache_key = f'products:{page}:{category}:{search}:{sort}'
+
+        cached_products = retrieve_products(cache_key)
+
+        if cached_products :
+            return jsonify(
+                cached_products
+            ), 200
+
         # base query to build upon based on params 
         base_query = Product.query
 
@@ -46,16 +56,36 @@ def product_index () :
         if sort and sort != 'recommended':
             # to map sort options, utilizing text() in query
             sort_options = {
-                'priceAsc': 'price ASC',
-                'priceDesc': 'price DESC',
+                'priceAsc': 
+                    '''
+                        COALESCE(
+                            (SELECT price FROM portions
+                            WHERE portions.product_id = products.id
+                            AND portions.size = :whole
+                            LIMIT 1), 0
+                        ) ASC
+                    '''
+                ,
+                'priceDesc':
+                    '''
+                        COALESCE(
+                            (SELECT price FROM portions
+                            WHERE portions.product_id = products.id
+                            AND portions.size = :whole
+                            LIMIT 1), 0
+                        ) DESC
+                    '''
+                ,
                 'nameAsc': 'name ASC',
                 'nameDesc': 'name DESC',
             }
-            
+        
             sort_option = sort_options.get(sort)
 
-            if sort_option :
+            if sort_option and sort in ['priceAsc', 'priceDesc'] :
                 # adding sort to query
+                base_query = base_query.order_by(text(sort_option).params(whole = Portion_Size.WHOLE.value))
+            elif sort_option :
                 base_query = base_query.order_by(text(sort_option))
 
         if search :
@@ -76,12 +106,15 @@ def product_index () :
         if products.items :
             
             products_list = [ product.as_dict() for product in products.items ]
-            
-            return jsonify({
+            response = {
                 'products': products_list,
                 'totalPages': products.pages,
                 'currentPage': page
-            }), 200
+            }
+
+            store_products(cache_key, response)
+            
+            return jsonify(response), 200
         
         # otherwise, return empty array
         else :
@@ -326,6 +359,7 @@ def product_update_inventory () :
         return jsonify({
             'error': f'Error updating inventory: {str(error)}'
         }), 500
+
 
 @product_bp.route('/<int:id>', methods = ['GET'])
 def product_show (id) :

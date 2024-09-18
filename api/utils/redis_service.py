@@ -1,9 +1,22 @@
 import os
+import json
 
 from cryptography.fernet import Fernet
 from ...redis_config import get_redis_client
 
 fernet = Fernet(os.getenv('FERNET_KEY').encode())
+
+def retrieve_products (key) :
+    redis_client = get_redis_client()
+    cached_products = redis_client.get(key)
+    return json.loads(cached_products) if cached_products else None
+
+def store_products (key, response) :
+    redis_client = get_redis_client()
+    
+    # expiration set for 24 hours
+    redis_client.setex(key, 86400, json.dumps(response))
+
 
 def encrypt_token (token) :
     return fernet.encrypt(token.encode()).decode()
