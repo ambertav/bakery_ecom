@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from ...database import db
 from ..decorators import token_required
-from ..utils.redis_service import retrieve_products, store_products
+from ..utils.redis_service import cache_products, need_product_bucket, get_filtered_products, cache_filtered_products
 from ..models import Product, Category, Portion, Role, Portion_Size
 
 from ..utils.aws_s3 import s3_photo_upload
@@ -31,15 +31,19 @@ def product_index () :
     - On error, returns a 500 status with an error message.
     '''
     try :
+        if need_product_bucket() :
+            products = Product.query.all()
+            cache_products(products)
+
         # extract page and params
         page = request.args.get('page', 1, type = int)
         category = request.args.get('category')
         search = request.args.get('search')
         sort = request.args.get('sort')
 
-        cache_key = f'products:{page}:{category}:{search}:{sort}'
+        cache_key = f'filter:products:{page}:{category}:{search}:{sort}'
 
-        cached_products = retrieve_products(cache_key)
+        cached_products = get_filtered_products(cache_key)
 
         if cached_products :
             return jsonify(
@@ -112,7 +116,7 @@ def product_index () :
                 'currentPage': page
             }
 
-            store_products(cache_key, response)
+            cache_filtered_products(cache_key, response)
             
             return jsonify(response), 200
         
