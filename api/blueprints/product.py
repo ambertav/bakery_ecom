@@ -5,7 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from ...database import db
 from ..decorators import token_required
-from ..utils.redis_service import cache_products, need_product_bucket, get_filtered_products, cache_filtered_products
+from ..utils.redis_service import need_product_cache_bucket, cache_products, get_product_cache, get_filtered_products_cache, cache_filtered_products
 from ..models import Product, Category, Portion, Role, Portion_Size
 
 from ..utils.aws_s3 import s3_photo_upload
@@ -31,7 +31,7 @@ def product_index () :
     - On error, returns a 500 status with an error message.
     '''
     try :
-        if need_product_bucket() :
+        if need_product_cache_bucket() :
             products = Product.query.all()
             cache_products(products)
 
@@ -43,7 +43,7 @@ def product_index () :
 
         cache_key = f'filter:products:{page}:{category}:{search}:{sort}'
 
-        cached_products = get_filtered_products(cache_key)
+        cached_products = get_filtered_products_cache(cache_key)
 
         if cached_products :
             return jsonify(
@@ -376,19 +376,23 @@ def product_show (id) :
     - On error, returns a 500 status with an error message.
     '''
     try :
-        product = Product.query.get(id)
+        product = get_product_cache(id)
 
-        if product :
-            product_detail = product.as_dict()
+        if not product :
+            product = Product.query.get(id)
+            if product :
+                product = product.as_dict()
 
-            return jsonify({
-                'product': product_detail
-            }), 200
-        else :
+        if not product :
             return jsonify({
                 'error': 'Product not found'
             }), 404
+
+        return jsonify({
+            'product': product
+        }), 200
         
+
     except Exception as error :
         current_app.logger.error(f'Error fetching product: {str(error)}')
         return jsonify({

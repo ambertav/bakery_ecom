@@ -6,7 +6,7 @@ from ...redis_config import get_redis_client
 
 fernet = Fernet(os.getenv('FERNET_KEY').encode())
 
-def need_product_bucket () :
+def need_product_cache_bucket () :
     '''
     Checks if any keys with 'all_products' exists in cache using scan.
     Indicates whether a new cache of all the products needs to be created.
@@ -45,7 +45,13 @@ def cache_products (products) :
 
         pipe.execute()
 
-def get_filtered_products (key) :
+def get_product_cache (id) :
+    redis_client = get_redis_client()
+    product = redis_client.get(f'all_products:{id}')
+
+    return json.loads(product) if product else None
+
+def get_filtered_products_cache (key) :
     '''
     Retrieves a filtered list of products from cache based on provided filter parameters (indicated in key).
     
