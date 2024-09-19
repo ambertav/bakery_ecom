@@ -3,7 +3,7 @@ import redis
 import jwt
 
 from ...database import db
-from ..utils.redis_service import store_token, is_token_blacklisted
+from ..utils.redis_service import cache_token, is_token_blacklisted
 from ..utils.token import generate_jwt, decode_jwt, get_time_until_jwt_expire
 from ..utils.set_auth_cookies import set_tokens_in_cookies
 from ..decorators import token_required
@@ -122,7 +122,7 @@ def logout () :
         ttl = int(get_time_until_jwt_expire(refresh_token)) + 300
 
         if ttl > 0 :
-            store_token(refresh_token, ttl)
+            cache_token(refresh_token, ttl)
     
     except redis.RedisError as re :
         current_app.logger.error(f'Redis error: {str(re)}')
@@ -215,7 +215,7 @@ def refresh_authentication_tokens () :
         ttl = int(get_time_until_jwt_expire(token)) + 300
 
         if ttl > 0 :
-            store_token(token, ttl)
+            cache_token(token, ttl)
         
         access_token = generate_jwt(id, payload.get('role'), 15)
         refresh_token = generate_jwt(id, payload.get('role'), 7 * 24 * 60)
