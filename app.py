@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import stripe
@@ -6,7 +6,7 @@ import os
 
 from .config import config
 from .database import init_db
-from .redis_config import init_redis
+from .redis_config import init_redis, get_redis_client
 
 def create_app () : 
     '''
@@ -51,6 +51,36 @@ def create_app () :
     app.register_blueprint(cart_item_bp, url_prefix = '/api/cart')
     app.register_blueprint(order_bp, url_prefix = '/api/order')
     app.register_blueprint(address_bp, url_prefix = '/api/address')
+
+    # apply rate limiter
+    @app.before_request
+    def global_rate_limit () :
+        '''
+        Applies a fixed window rate limiter based on client IP address.
+        Utilizes `MAX_REQUESTS` and `RATE_LIMIT_WINDOW` values from app configuration.
+
+        Returns :
+            Response : 
+                - JSON response of 429 error if maximum number of requests is reached in the given window.
+                - None if number of requests is within the limit.
+        '''
+        redis_client = get_redis_client()
+        ip = request.remote_addr
+
+        current = redis_client.get(f'rate-limit:{ip}')
+
+        if current :
+            current = int(current)
+                
+            if current >= app.config['MAX_REQUESTS'] :
+                return jsonify({
+                    'error': 'Too many requests'
+                }), 429
+                
+            redis_client.incr(f'rate-limit:{ip}')
+                
+        else :
+            redis_client.set(f'rate-limit:{ip}', 1, ex = app.config['RATE_LIMIT_WINDOW'])
 
     @app.after_request
     def after_request(response) :

@@ -6,6 +6,8 @@ class Config :
     STRIPE_API_KEY = os.getenv('STRIPE_SECRET_KEY')
     WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
     REDIS_URL = os.getenv('REDIS_URL')
+    MAX_REQUESTS = 60
+    RATE_LIMIT_WINDOW = 60
 
 class DevelopmentConfig(Config):
     DEBUG = True
