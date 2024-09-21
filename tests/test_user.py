@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch
 
 from ..api.models import User
@@ -69,3 +70,39 @@ def test_get_user_info (flask_app) :
     assert response.status_code == 200
     assert response.json['user']['name'] ==  user.name
     assert response.json['user']['isAdmin'] == False
+
+@pytest.mark.parametrize('refresh_token, is_blacklisted, decode_jwt_return, expected_status, expected_message', [
+    ('valid_refresh_token', False, {'sub': 1, 'role': 'user'}, 200, 'Tokens refreshed successfully'),  # Successful case
+    (None, False, None, 401, 'Invalid token'),  # No token case
+    ('valid_refresh_token', True, {'sub': 1, 'role': 'user'}, 401, 'Invalid token'),  # Blacklisted token case
+    ('valid_refresh_token', False, None, 401, 'Invalid token'),  # Invalid token case
+    ('valid_refresh_token', False, {'sub': 9999, 'role': 'user'}, 401, 'Invalid token')  # User not found case
+])
+def test_refresh_authentication_tokens (flask_app, create_client_user, refresh_token, is_blacklisted, decode_jwt_return, expected_status, expected_message) :
+    user = create_client_user
+
+    with patch('flask.request.cookies.get', return_value = refresh_token), \
+        patch('backend.api.utils.redis_service.is_token_blacklisted', return_value = is_blacklisted), \
+        patch('backend.api.utils.token.decode_jwt', return_value = decode_jwt_return), \
+        patch('backend.api.models.User.query.get', return_value = user if decode_jwt_return and decode_jwt_return['sub'] == user.id else None), \
+        patch('backend.api.utils.token.generate_jwt') as mock_generate_jwt :
+
+        mock_generate_jwt.side_effect = ['new_access_token', 'new_refresh_token'] if expected_status == 200 else [None, None]
+
+        response = flask_app.get('/api/user/refresh')
+
+        assert response.status_code == expected_status
+        assert response.json['error'] == expected_message if expected_status != 200 else response.json['message'] == expected_message
+        
+def test_logout (flask_app) :
+    refresh_token = 'valid_refresh_token'
+
+    with patch('flask.request.cookies.get', return_value = refresh_token), \
+        patch('backend.api.utils.token.get_time_until_jwt_expire', return_value = 100), \
+        patch('backend.api.utils.redis_service.cache_token') as mock_cache_token, \
+        patch('backend.api.utils.set_auth_cookies.set_tokens_in_cookies') as mock_set_cookies :
+        
+        response = flask_app.get('/api/user/logout')
+
+        assert response.status_code == 200
+        assert response.json['message'] == 'Successfully logged out'
