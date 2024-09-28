@@ -3,6 +3,18 @@ from unittest.mock import patch
 
 from ..api.models import User
 
+def test_hash_password (create_client_user) :
+    # created with password = 'password'
+    user = create_client_user
+
+    assert user.password != 'password'
+    assert isinstance(user.password, bytes)
+
+def test_verify_password (create_client_user) :
+    user = create_client_user
+
+    assert user.verify_password('password') is True
+    assert user.verify_password('invalid') is False
 
 def test_signup (flask_app) :
     with patch('backend.api.utils.token.generate_jwt') as mock_generate_jwt, \
@@ -29,7 +41,6 @@ def test_signup (flask_app) :
 
     new_user = User.query.filter_by(name = 'Test').first()
     assert new_user is not None
-    assert isinstance(new_user.password, bytes)
 
 # mock firebase, user login
 def test_login (flask_app) :
