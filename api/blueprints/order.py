@@ -3,7 +3,6 @@ from sqlalchemy.orm import joinedload
 import stripe
 import os
 import json
-import datetime
 
 from ...database import db
 from ..decorators import token_required
@@ -490,7 +489,6 @@ def create_order (address, user, method) :
         # create instance of order and associate with user
         new_order = Order(
             user_id = user,
-            date = datetime.datetime.now(),
             total_price = total,
             status = Order_Status.PENDING,
             delivery_method = Deliver_Method[method.upper()],

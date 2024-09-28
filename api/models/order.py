@@ -1,5 +1,7 @@
 from sqlalchemy.exc import SQLAlchemyError
 from enum import Enum
+from datetime import datetime, timezone
+
 from .task import Task
 
 from ...database import db
@@ -95,7 +97,7 @@ class Order (db.Model) :
     # one to one relationship, cascade deletion
     task = db.relationship('Task', backref = 'order', uselist = False, lazy = 'joined', cascade = 'all, delete-orphan')
 
-    def __init__ (self, user_id, date, total_price, status, delivery_method, payment_status, shipping_address_id) :
+    def __init__ (self, user_id, total_price, status, delivery_method, payment_status, shipping_address_id) :
         '''
         Initializes a new order instance.
 
@@ -109,7 +111,7 @@ class Order (db.Model) :
             shipping_address_id (int) : ID of the shipping address.
         '''
         self.user_id = user_id
-        self.date = date
+        self.date = datetime.now(timezone.utc)
         self.total_price = total_price
         self.status = status
         self.delivery_method = delivery_method
