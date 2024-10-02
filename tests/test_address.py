@@ -1,7 +1,6 @@
 import pytest
 import unittest
 from unittest.mock import patch
-import datetime
 
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError

@@ -1,75 +1,77 @@
 import pytest
 import random
+from unittest.mock import patch
 
 from ..database import db
-from ..api.models.models import Cart_Item, Portion, Product, Category
-
+from ..api.models import Cart_Item, Portion, Product, Category
 
 @pytest.fixture(scope = 'module')
-def seed_products (flask_app) :
-    products_data = [
-        {
-            'name': 'Product 1',
-            'description': 'Description 1',
-            'category': Category.COOKIE,
-            'image': 'https://example.com/image.png',
-            'price': 10.00,
-            'stock': 100
-        },
-        {
-            'name': 'Product 2',
-            'description': 'Description 2',
-            'category': Category.CAKE,
-            'image': 'https://example.com/image.jpg',
-            'price': 15.00,
-            'stock': 150
-        },
-        {
-            'name': 'Product 3',
-            'description': 'Description 3',
-            'category': Category.CUPCAKE,
-            'image': 'https://example.com/image.gif',
-            'price': 20.00,
-            'stock': 200
-        }
+def seed_products () :
+
+    products = [
+        Product(
+            name = 'Product 1',
+            description = 'Description 1',
+            category = Category.COOKIE
+        ),
+        Product(
+            name = 'Product 2',
+            description = 'Description 2',
+            category = Category.CAKE
+        ),
+        Product(
+            name = 'Product 3',
+            description = 'Description 3',
+            category = Category.CUPCAKE
+        ),
     ]
 
-    session = db.session()
-
     try:
-        # insert products in bulk
-        session.bulk_insert_mappings(Product, products_data)
-        session.commit()
+        db.session.add_all(products)
+        db.session.flush()
+
+        for product in products :
+            portions = product.create_portions(10.00)
+            db.session.add_all(portions)
+
+        db.session.commit()
+
+        products_details = Product.query.all()
 
         # returns list of all products for use throughout module tests
-        yield Product.query.all()
+        yield products_details
 
     finally:
-        session.rollback()
-        session.close()
+        db.session.rollback()
+        db.session.close()
  
 
 # creating cart item, scenario: logged in + adding to cart
 @pytest.mark.parametrize('valid_product', [True, False])
-def test_cart_item_creation (flask_app, create_client_user, mock_firebase, seed_products, valid_product) :
-    # create user and get list of products
-    user, test_uid = create_client_user
+def test_cart_item_creation (flask_app, user_login, create_client_user, seed_products, valid_product) :
+    user_login
+
+    user = create_client_user
     products = seed_products
 
-    # if valid test,
-    if valid_product : 
+    if valid_product :
         id = products[0].id
+        portion_id = products[0].portions[0].id
     else :
-        # otherwise, initialize id with an invalid id
         id = 0
+        portion_id = 0
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+
         response = flask_app.post('/api/cart/add', 
-            headers = { 'Authorization': f'Bearer {test_uid}' },
             json = { 
                 'id': id,
+                'portion': portion_id,
                 'qty': generate_random_quantity(),
-                'portion': 'WHOLE'
             },
         )
 
@@ -83,14 +85,12 @@ def test_cart_item_creation (flask_app, create_client_user, mock_firebase, seed_
 
 
 # creating cart item, scenario: user has items in cart and then logs in / signs up
-def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_firebase, seed_products) :
-    # create user and get list of products
-    user, test_uid = create_client_user
+def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_products) :
+    user = create_client_user
     products = seed_products
 
     previous_cart_item_count = Cart_Item.query.filter_by(user_id = user.id).count()
 
-    # query for existing cart items starting quantity
     cart_item = Cart_Item.query.filter_by(user_id = user.id, product_id = products[0].id).first()
     qty_of_existing_item = cart_item.quantity
 
@@ -99,22 +99,27 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_f
         # product id that does not match 
     localStorageCart = [
         {
-            'productId': products[0].id,
+            'product': products[0].as_dict(),
             'quantity': 4,
-            'portion': 'WHOLE',
+            'portion': products[0].as_dict().get('portions')[0],
         }, 
         {
-            'productId': products[1].id,
+            'product': products[1].as_dict(),
             'quantity': 2,
-            'portion': 'WHOLE',
+            'portion': products[1].as_dict().get('portions')[0],
         },
     ]
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+
         response = flask_app.post('/api/user/login', 
-            headers = { 'Authorization': f'Bearer {test_uid}' },
             json = {
-                'name': 'test',
+                'email': user.email,
+                'password': 'password',
                 'localStorageCart': localStorageCart
             },
         )
@@ -122,13 +127,11 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_f
     assert response.status_code == 200
     assert response.json['message'] == 'User logged in successfully'
 
-    # query all cart_items for the user, assert length
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
     assert len(cart_items) == len(localStorageCart)
 
-    # loop to go through and assert product id and quantities of cart_items
     for i, item in enumerate(localStorageCart):
-        assert cart_items[i].product_id == item['productId']
+        assert cart_items[i].product_id == item['product'].get('id')
 
         # for case of existing cart_item product id, quantity should equal sum of existing qty and local storage item qty
             # this is so that duplicates are not created, and instead the quantity is just incremented by the input
@@ -138,89 +141,25 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_f
         assert cart_items[i].quantity == expected_quantity
 
 
-@pytest.mark.parametrize('category, is_valid_portion', [
-    (Category.COOKIE, True),
-    (Category.COOKIE, False),
-    (Category.CAKE, True),
-    (Category.CAKE, False),
-    (Category.CUPCAKE, True),
-    (Category.CUPCAKE, False),
-])
-def test_cart_item_portion_and_price_validation (flask_app, create_client_user, seed_products, category, is_valid_portion) :
-    user, test_uid = create_client_user
-    seed_products
+def test_view_cart (flask_app, create_client_user, user_login) :
+    user_login
 
-    # create dictionary of valid portions for each of the tested categories
-    valid_portion_options = {
-        Category.COOKIE: [Portion.WHOLE],
-        Category.CUPCAKE: [Portion.WHOLE, Portion.MINI],
-        Category.CAKE: [Portion.WHOLE, Portion.MINI, Portion.SLICE],
-    }
-
-    # query for product for use in cart item creation
-    product = Product.query.filter_by(category = category).first()
-
-    if is_valid_portion :
-        # get valid portion option
-        portion = valid_portion_options[category][0]
-
-        # with valid data, should create cart_item
-        cart_item = create_and_add_cart_item(product.id, user.id, portion)
-        created_item = Cart_Item.query.get(cart_item.id)
-        assert created_item is not None
-
-        # map out price multipler based on portion
-        portion_multiplier_mapping = {
-            Portion.WHOLE: 1,
-            Portion.MINI: 0.5,
-            Portion.SLICE: 0.15
-        }
-
-        # get the expected price multiplier
-        expected_multiplier = portion_multiplier_mapping.get(portion)
-
-        # define a tolerance for comparison
-        tolerance = 0.01
-
-        # assert that the price reflects expected price multiplier within the given tolerance
-        assert abs(created_item.price / product.price - expected_multiplier) <= tolerance
-
-    else :
-        with pytest.raises(ValueError) as error :
-            # get invalid portion option 
-            invalid_options = [portion for portion in Portion if portion not in valid_portion_options[category]]
-
-            if invalid_options :
-                portion = invalid_options[0] 
-            else :
-                # if no invalid options (such as for cakes and pies that come in all options), set portion to 'INVALID'
-                # this should violate enum, and returns ValueError 
-                portion = 'INVALD'
-
-            # testing portion column constraints, should return ValueError
-            cart_item = create_and_add_cart_item(product.id, user.id, portion)
-        
-        db.session.rollback # rollback failed transaction in database
-        assert error.type is ValueError # assert ValueError
-
-
-def test_view_cart (flask_app, create_client_user, mock_firebase) :
-    # creating user, query for all of user's cart items
-    user, test_uid = create_client_user
+    user = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    with mock_firebase(test_uid) :
-        response = flask_app.get('/api/cart/', 
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-        )
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
 
-    assert response.status_code in [200, 308]
-    # assert response returns all cart items
-    assert len(response.json['shopping_cart']) is len(cart_items)
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
 
-    # assert that product id for each matches
-    for i, cart_item in enumerate(cart_items):
-        assert response.json['shopping_cart'][i]['productId'] == cart_item.product_id
+        response = flask_app.get('/api/cart/')
+
+        assert response.status_code == 200
+        assert len(response.json['shopping_cart']) is len(cart_items)
+
+        for i, cart_item in enumerate(cart_items):
+            assert response.json['shopping_cart'][i]['product'].get('id') == cart_item.product_id
 
         
 @pytest.mark.parametrize('valid_id, new_qty', [
@@ -229,70 +168,67 @@ def test_view_cart (flask_app, create_client_user, mock_firebase) :
     (False, None), # invalid id --> 404
     (True, -1), # valid id, invalid qty --> 500
 ])
-def test_update_cart_item_quantity (flask_app, create_client_user, mock_firebase, valid_id, new_qty) :
-    # creating user, query for all of user's cart items
-    user, test_uid = create_client_user
+def test_update_cart_item_quantity (flask_app, create_client_user, user_login, valid_id, new_qty) :
+    user_login
+
+    user = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    if valid_id :
-        item_id = cart_items[0].id
-    else :
-        item_id = 0
+    item_id = cart_items[0].id if valid_id else 0
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+
         response = flask_app.put(f'/api/cart/{item_id}/update', 
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-            json = {
-                'newQty': new_qty
-            },
+            json = { 'newQty': new_qty },
         )
 
-    if valid_id and new_qty >= 0 :
-        assert response.status_code == 200
-        assert response.json['message'] == 'Item quantity updated successfully'
+        if valid_id and new_qty >= 0 :
+            assert response.status_code == 200
+            assert response.json['message'] == 'Item quantity updated successfully'
 
-        # query for update
-        updated_cart_item = Cart_Item.query.filter_by(user_id = user.id, id = item_id).first()
+            updated_cart_item = Cart_Item.query.filter_by(user_id = user.id, id = item_id).first()
 
-        # if the quantity to update to is greater than 0
-        if new_qty > 0 :
-            # assert that the quantities match
-            assert updated_cart_item.quantity == new_qty
-        elif new_qty == 0 :
-            # else the query should return None because the item was deleted
-            assert updated_cart_item is None
+            if new_qty > 0 :
+                assert updated_cart_item.quantity == new_qty
+            elif new_qty == 0 :
+                # should return None because the item was deleted
+                assert updated_cart_item is None
 
-    # if quantity is negative, error
-    elif valid_id and new_qty < 0 :
-        assert response.status_code == 400
+        # if quantity is negative, error
+        elif valid_id and new_qty < 0 :
+            assert response.status_code == 400
 
-    # else not valid id, error
-    else :
-        assert response.status_code == 404
-        assert response.json['error'] == 'Item not found in cart'
+        # else not valid id, error
+        else :
+            assert response.status_code == 404
+            assert response.json['error'] == 'Item not found in cart'
 
 
 @pytest.mark.parametrize('valid_id', [
     (True), # valid id, cart item exists --> will be deleted
     (False) # invalid id, cart item does not exist --> 404
 ])
-def test_delete_cart_item (flask_app, create_client_user, mock_firebase, valid_id) :
-    # creating user, query for all of user's cart items
-    user, test_uid = create_client_user
+def test_delete_cart_item (flask_app, create_client_user, user_login, valid_id) :
+    user_login
+
+    user = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    # storing previous length to verify if one was deleted
     previous_length = len(cart_items)
 
-    if valid_id : 
-        item_id = cart_items[0].id
-    else :
-        item_id = 0
+    item_id = cart_items[0].id if valid_id else 0
 
-    with mock_firebase(test_uid) :
-        response = flask_app.delete(f'/api/cart/{item_id}/delete', 
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-        )
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+
+        response = flask_app.delete(f'/api/cart/{item_id}/delete')
 
     if valid_id :
         assert response.status_code == 200
@@ -318,15 +254,16 @@ def generate_random_quantity () :
     return random.randint(1, 10)
 
 
-def create_and_add_cart_item(product_id, user_id, portion) :
+def create_and_add_cart_item(product_id, user_id, portion_id) :
     cart_item = Cart_Item(
         product_id = product_id,
         user_id = user_id,
-        portion = portion,
+        portion_id = portion_id,
         quantity = 2,
         ordered = False,
         order_id = None,
     )
+
     db.session.add(cart_item)
     db.session.commit()
 
