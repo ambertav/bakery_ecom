@@ -56,7 +56,7 @@ class Cart_Item (db.Model) :
     product = db.relationship('Product', backref = 'cart_items')
     portion = db.relationship('Portion')
 
-    def __init__ (self, user_id, product_id, portion_id, quantity, ordered, order_id) :
+    def __init__ (self, user_id, product_id, portion_id, quantity) :
         '''
         Initializes a new cart_item instance.
 
@@ -75,8 +75,8 @@ class Cart_Item (db.Model) :
         self.product_id = product_id
         self.portion_id = portion_id
         self.quantity = quantity
-        self.ordered = ordered
-        self.order_id = order_id
+        self.ordered = False
+        self.order_id = None
 
         self._calculate_price()
     

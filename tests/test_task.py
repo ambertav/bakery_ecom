@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timezone
 
 from ..database import db
-from ..api.models import Order, Admin, Address, Cart_Item, Portion, Portion_Size, Product, Category
+from ..api.models import Order, Address, Cart_Item, Portion_Size, Product, Category
 from ..api.models.order import Order_Status, Deliver_Method, Pay_Status
 
 @pytest.fixture(scope = 'module')
@@ -27,10 +27,8 @@ def seed_database (flask_app, create_client_user) :
         cart_item = Cart_Item(
             user_id = user.id,
             product_id = product.id,
-            quantity = 1,
             portion_id = portion.id,
-            ordered = False,
-            order_id = None
+            quantity = 1,
         )
         db.session.add(cart_item)
         db.session.commit()

@@ -202,7 +202,7 @@ def create_item (data, user) :
                 }
         else :
             # otherwise, create item with product id and inputted quantity and portion
-            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion_id = data.get('portion'), quantity = data.get('qty'), ordered = False, order_id = None)
+            new_item = Cart_Item(user_id = user.id, product_id = product.id, portion_id = data.get('portion'), quantity = data.get('qty'))
             db.session.add(new_item)
             success = True
 
