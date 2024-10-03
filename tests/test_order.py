@@ -1,30 +1,35 @@
 import pytest
 import unittest
-import json
 import datetime
 import random
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from sqlalchemy.sql.expression import func
 
 from ..database import db
 from ..config import config
-from ..api.models.models import Order, Order_Status, Deliver_Method, Pay_Status, User, Address, Cart_Item, Portion, Product, Category, Task
+from ..api.models import Order, Address, Cart_Item, Portion, Product, Category, Task
+from ..api.models.order import  Order_Status, Deliver_Method, Pay_Status
 
 @pytest.fixture(scope = 'module')
-def seed_database (flask_app, create_client_user) :
+def seed_database (create_client_user) :
     try:
-        user, test_uid = create_client_user
+        user = create_client_user
 
         product = Product(
             name = 'Product 1',
             description = 'Description 1',
             category = Category.CAKE,
-            image = 'https://example.com/image.jpg',
-            price = 10.00,
-            stock = 50
         )
         db.session.add(product)
+        db.session.flush()
+
+        portions = product.create_portions(10.00)
+        db.session.add_all(portions)
+
+        for portion in portions :
+            portion.update_stock(5)
+
         db.session.commit()
 
         address = Address(
@@ -41,12 +46,10 @@ def seed_database (flask_app, create_client_user) :
         db.session.commit()
 
         cart_item = Cart_Item(
-            user_id = user.id,
             product_id = product.id,
+            user_id = user.id,
+            portion_id = product.portions[0].id,
             quantity = 1,
-            portion = Portion.WHOLE,
-            ordered = False,
-            order_id = None
         )
         db.session.add(cart_item)
         db.session.commit()
@@ -61,8 +64,10 @@ def seed_database (flask_app, create_client_user) :
 
 # testing case of existing address or new address submitted
 @pytest.mark.parametrize('to_create_address', (True, False))
-def test_create_checkout_session (flask_app, create_client_user, mock_firebase, seed_database, to_create_address) :
-    user, test_uid = create_client_user
+def test_create_checkout_session (flask_app, create_client_user, user_login, seed_database, to_create_address) :
+    user_login
+
+    user = create_client_user
     cart_item, address = seed_database
 
     if to_create_address :
@@ -80,9 +85,12 @@ def test_create_checkout_session (flask_app, create_client_user, mock_firebase, 
         # if not case of new address, use existing
         shipping = address.as_dict()
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
         response = flask_app.post('/api/order/create-checkout-session',
-            headers = { 'Authorization': f'Bearer {test_uid}' },
             json = {
                 'cart': [cart_item.as_dict()],
                 'method': 'STANDARD',
@@ -100,9 +108,10 @@ def test_create_checkout_session (flask_app, create_client_user, mock_firebase, 
         assert new_address is not None
 
 
-def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, seed_database) :
-    # create user and get cart item and address
-    user, test_uid = create_client_user
+def test_handle_stripe_webhook (flask_app, create_client_user, user_login, seed_database) :
+    user_login
+
+    user = create_client_user
     cart_item, address = seed_database
 
     # mock payload and event data
@@ -125,56 +134,56 @@ def test_handle_stripe_webhook (flask_app, create_client_user, mock_firebase, se
 
     # mock the webhook secret
     with patch.dict(config, {'WEBHOOK_SECRET': 'mock_webhook_secret'}) :
-        with mock_firebase(test_uid) :
-        # mock the stripe event
-            with patch('stripe.Webhook.construct_event') as mock_construct_event :
-                # return the mock payload data 
-                mock_construct_event.return_value = mock_payload_data
+        with patch('flask.request.cookies.get') as mock_get_cookie, \
+            patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt, \
+            patch('stripe.Webhook.construct_event') as mock_construct_event :
 
-                # making request
-                response = flask_app.post('/api/order/stripe-webhook',
-                    headers = { 'Authorization': f'Bearer {test_uid}' },
-                    json = mock_payload_data
-                )
+            mock_get_cookie.return_value = 'valid_access_token'
+            mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+            mock_construct_event.return_value = mock_payload_data
 
-    assert response.status_code == 200
-    assert response.json['success'] == True
+            # making request
+            response = flask_app.post('/api/order/stripe-webhook', json = mock_payload_data)
 
-    # asserting that order was created
-    created_order = Order.query.filter_by(user_id = user.id).first()
-    assert created_order is not None
+            assert response.status_code == 200
+            assert response.json['success'] == True
 
-    created_task = Task.query.filter_by(order_id = created_order.id).first()
-    assert created_task is not None
+            # asserting that order was created
+            created_order = Order.query.filter_by(user_id = user.id).first()
+            assert created_order is not None
 
-    # asserting that order was finalized, address was associated, and stripe session info was saved
-    assert created_order.shipping_address_id == address.id
-    assert created_order.status == Order_Status.PENDING
-    assert created_order.payment_status == Pay_Status.COMPLETED
-    assert created_order.stripe_session_id == mock_payload_data['data']['object']['id']
-    unittest.TestCase().assertDictEqual(created_order.cart_items[0].as_dict(), cart_item.as_dict())
+            created_task = Task.query.filter_by(order_id = created_order.id).first()
+            assert created_task is not None
 
-            
+            # asserting that order was finalized, address was associated, and stripe session info was saved
+            assert created_order.shipping_address_id == address.id
+            assert created_order.status == Order_Status.PENDING
+            assert created_order.payment_status == Pay_Status.COMPLETED
+            unittest.TestCase().assertDictEqual(created_order.cart_items[0].as_dict(), cart_item.as_dict())
+
+
 @pytest.mark.parametrize('requesting_recents', (True, False))
-def test_order_history (flask_app, create_client_user, mock_firebase, seed_database, requesting_recents) :
-    # create user, get access to address
-    user, test_uid = create_client_user
+def test_order_history (flask_app, create_client_user, user_login, seed_database, requesting_recents) :
+    user_login
+
+    user = create_client_user
     cart_item, address = seed_database
 
     # seed in orders, pass in number of iterations / orders to create
     seed_orders(user.id, address.id, 5)
 
-    # query for count of user's orders
     count_of_orders = Order.query.filter_by(user_id = user.id).count()
 
     # if user is requesting most recent orders, query param of recent=true
     query_params = { 'recent': 'true' } if requesting_recents else {}
 
-    with mock_firebase(test_uid) :
-        response = flask_app.get('/api/order/',
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-            query_string = query_params,
-        )
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+        
+        response = flask_app.get('/api/order/', query_string = query_params)
 
     assert response.status_code in [200, 308]
 
@@ -190,9 +199,10 @@ def test_order_history (flask_app, create_client_user, mock_firebase, seed_datab
 
 
 # show order
-def test_show_order (flask_app, create_client_user, mock_firebase) :
-    # create user
-    user, test_uid = create_client_user
+def test_show_order (flask_app, create_client_user, user_login) :
+    user_login
+
+    user = create_client_user
 
     # query for order
     order = Order.query.filter_by(user_id = user.id).first()
@@ -203,15 +213,13 @@ def test_show_order (flask_app, create_client_user, mock_firebase) :
     order_dict = order.as_dict()
     order_dict['totalPrice'] = str(order_dict['totalPrice'])
 
-    order_dict['items'] = [
-        { **item.as_dict(), 'price': str(item.price) }
-        for item in order.cart_items
-    ]
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
 
-    with mock_firebase(test_uid) :
-        response = flask_app.get(f'/api/order/{order.id}',
-            headers = { 'Authorization': f'Bearer {test_uid}' }
-        )
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+
+        response = flask_app.get(f'/api/order/{order.id}')
 
     assert response.status_code in [200, 308]
     unittest.TestCase().assertDictEqual(order_dict, response.json['order'])
@@ -225,8 +233,10 @@ def test_show_order (flask_app, create_client_user, mock_firebase) :
     ('in-progress', True, False),
     ('in-progress', False, True),
 ])
-def test_order_fulfillment (flask_app, create_admin_user, mock_firebase, status, is_filter, is_search) :
-    admin, test_uid = create_admin_user
+def test_order_fulfillment (flask_app, create_admin_user, admin_login, status, is_filter, is_search) :
+    admin_login
+    
+    admin = create_admin_user
 
     # retrieve an order to search by
     order = Order.query.first()
@@ -239,10 +249,14 @@ def test_order_fulfillment (flask_app, create_admin_user, mock_firebase, status,
     # format query params for request
     query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value is not None }
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
+        
         response = flask_app.get(f'/api/order/fulfillment/{status}/',
             query_string = query_params,
-            headers = { 'Authorization': f'Bearer {test_uid}' }
         )
 
     assert response.status_code in [200, 308]
@@ -276,14 +290,17 @@ def test_order_fulfillment (flask_app, create_admin_user, mock_firebase, status,
             unittest.TestCase().assertListEqual([], response.json['orders'])
             assert response.json['message'] == 'No orders found'
 
+
 @pytest.mark.parametrize('is_batch, is_valid', [
     (False, False), # single input, invalid id --> 500
     (False, True), # single input with valid id --> 200
     (True, False), # batch input with one or more invalid ids --> 500
     (True, True), # batch input with all valid ids --> 200
 ])
-def test_start_orders (flask_app, create_admin_user, mock_firebase, is_batch, is_valid) :
-    admin, test_uid = create_admin_user
+def test_start_orders (flask_app, create_admin_user, admin_login, is_batch, is_valid) :
+    admin_login
+
+    admin = create_admin_user
 
     if is_batch :
         # get random orders
@@ -309,11 +326,16 @@ def test_start_orders (flask_app, create_admin_user, mock_firebase, is_batch, is
             # if invalid data test case, just create a list of a random invalid number
             id_list = [random.randint(1, 10)]
 
-    with mock_firebase(test_uid) :
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
+
         response = flask_app.put(f'/api/order/fulfillment/set-in-progress/',
-            headers = { 'Authorization': f'Bearer {test_uid}' },
             json = id_list # passing in list of ids or both single and batch test cases
         )
+
 
     if is_valid :
         assert response.status_code == 200
@@ -348,9 +370,11 @@ def test_start_orders (flask_app, create_admin_user, mock_firebase, is_batch, is
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, mock_firebase, valid_admin, valid_order, valid_status) :
-    admin, test_uid = create_admin_user
-    second_admin, second_uid = create_second_admin_user
+def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, admin_login, valid_admin, valid_order, valid_status) :
+    admin_login
+
+    admin = create_admin_user
+    second_admin = create_second_admin_user
 
     if valid_order :
         # search for order in db
@@ -364,19 +388,19 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
             task = Task.query.filter_by(order_id = order.id).first()
             task.assign_admin(admin.id)
 
-        if not valid_admin :
-            # set requesting admin to another admin that is not associated
-            test_uid = second_uid
-
     else :
         # get random invalid order id
         order_id = random.randint(1, 10)
 
-    
-    with mock_firebase(test_uid) :
-        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-pending/',
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-        )
+    admin_id = admin.id if valid_admin else second_admin.id
+
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': admin_id, 'role': 'admin' }
+
+        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-pending/')
 
     if valid_order :
         if valid_status :
@@ -398,7 +422,7 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
             assert response.status_code == 400
             assert response.json['error'] == 'Order status could not be updated'
     else :
-        assert response.status_code == 404
+        assert response.status_code == 400
         assert response.json['error'] == 'Order not found'
 
     
@@ -409,9 +433,11 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, mock_firebase, valid_admin, valid_order, valid_status) :
-    admin, test_uid = create_admin_user
-    second_admin, second_uid = create_second_admin_user
+def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, admin_login, valid_admin, valid_order, valid_status) :
+    admin_login
+
+    admin = create_admin_user
+    second_admin = create_second_admin_user
 
     if valid_order :
         # search for order in db
@@ -425,19 +451,19 @@ def test_complete_order_fulfillment (flask_app, create_admin_user, create_second
             task = Task.query.filter_by(order_id = order.id).first()
             task.assign_admin(admin.id)
 
-        if not valid_admin :
-            # set requesting admin to another admin that is not associated
-            test_uid = second_uid
-
     else :
         # get random invalid order id
         order_id = random.randint(1, 10)
 
+    admin_id = admin.id if valid_admin else second_admin.id
     
-    with mock_firebase(test_uid) :
-        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-complete/',
-            headers = { 'Authorization': f'Bearer {test_uid}' },
-        )
+    with patch('flask.request.cookies.get') as mock_get_cookie, \
+        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
+
+        mock_get_cookie.return_value = 'valid_access_token'
+        mock_decode_jwt.return_value = { 'sub': admin_id, 'role': 'admin' }
+
+        response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-complete/')
 
     if valid_order :
         if valid_status :
@@ -458,10 +484,8 @@ def test_complete_order_fulfillment (flask_app, create_admin_user, create_second
             assert response.status_code == 400
             assert response.json['error'] == 'Order status could not be updated'
     else :
-        assert response.status_code == 404
+        assert response.status_code == 400
         assert response.json['error'] == 'Order not found'
-
-
 
 
 # ---- helpers ----
@@ -473,31 +497,31 @@ def seed_orders (user_id, address_id, iterations) :
         # query for product id
         product = Product.query.first()
 
-        # create order
+        cart_item = Cart_Item(
+            user_id = user_id,
+            product_id = product.id,
+            portion_id = product.portions[0].id,
+            quantity = 1,
+        )
+        db.session.add(cart_item)
+        db.session.flush()
+        db.session.refresh(cart_item)
+        
         order = Order(
             user_id = user_id,
-            total_price = product.price,
-            date = datetime.datetime.now(),
+            total_price = cart_item.price,
             status = Order_Status.PENDING,
-            stripe_payment_id = None,
             delivery_method = Deliver_Method.STANDARD,
             payment_status = Pay_Status.PENDING,
             shipping_address_id = address_id
         )
         db.session.add(order)
-        db.session.commit()
+        db.session.flush()
+        db.session.refresh(order)
 
+        order.associate_items([cart_item])
         order.create_associated_task()
 
-        cart_item = Cart_Item(
-            user_id = user_id,
-            product_id = product.id,
-            portion = Portion.WHOLE,
-            quantity = 1,
-            ordered = True,
-            order_id = order.id
-        )
-        db.session.add(cart_item)
         db.session.commit()
 
         orders.append(order)
