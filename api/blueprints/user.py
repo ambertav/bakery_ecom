@@ -51,6 +51,13 @@ def signup () :
         access_token = generate_jwt(new_user.id, 'user', 15)
         refresh_token = generate_jwt(new_user.id, 'user', 7 * 24 * 60)
 
+        response = make_response(
+            jsonify({
+                'message': 'User registered successfully',
+                'cartError': cartError
+            }), 201
+        )
+
         response = set_tokens_in_cookies(response, access_token, refresh_token)
 
         return response
