@@ -3,7 +3,7 @@ import random
 from unittest.mock import patch
 
 from ..database import db
-from ..api.models import Cart_Item, Portion, Product, Category
+from ..api.models import Cart_Item, Product, Category
 
 @pytest.fixture(scope = 'module')
 def seed_products () :

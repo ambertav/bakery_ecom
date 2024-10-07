@@ -1,6 +1,5 @@
 import pytest
 import unittest
-import datetime
 import random
 
 from unittest.mock import patch
@@ -8,7 +7,7 @@ from sqlalchemy.sql.expression import func
 
 from ..database import db
 from ..config import config
-from ..api.models import Order, Address, Cart_Item, Portion, Product, Category, Task
+from ..api.models import Order, Address, Cart_Item, Product, Category, Task
 from ..api.models.order import  Order_Status, Deliver_Method, Pay_Status
 
 @pytest.fixture(scope = 'module')

@@ -1,17 +1,12 @@
+from flask import make_response, redirect
 import pytest
-import uuid
 from unittest.mock import patch, MagicMock
 from sqlalchemy.sql.expression import delete
-from datetime import datetime, timezone
 
 from ..app import create_app
 from ..database import db
-from ..api.models.models import User, Admin, Address, Product, Cart_Item, Order, Task
-
-def generate_firebase_uid():
-    uid = str(uuid.uuid4())
-    firebase_uid = uid.replace('-', '_')
-    return firebase_uid
+from ..api.utils.set_auth_cookies import set_tokens_in_cookies
+from ..api.models import User, Admin, Address, Product, Portion, Cart_Item, Order, Task
 
 @pytest.fixture(scope = 'session')
 def flask_app () :
@@ -28,7 +23,7 @@ def flask_app () :
 @pytest.fixture(scope = 'session', autouse = True)
 def database_cleanup (flask_app) :
     # yield for tests to complete
-    yield 
+    yield
 
     # start database connection
     engine = db.get_engine(app = flask_app)
@@ -46,7 +41,8 @@ def database_cleanup (flask_app) :
             Address,
             User,
             Admin,
-            Product,
+            Portion,
+            Product
         ]
 
         # loop through and delete from each table
@@ -66,67 +62,63 @@ def database_cleanup (flask_app) :
 
 
 @pytest.fixture(scope = 'session')
-def mock_firebase(request):
-    def _mock_firebase(test_uid):
-        return patch('firebase_admin.auth.verify_id_token', MagicMock(return_value={'uid': test_uid}))
-    return _mock_firebase
-
-
-@pytest.fixture(scope = 'session')
-def create_admin_user () :
-    admin_uid = generate_firebase_uid()
-    
+def create_admin_user () :    
     admin = Admin(
         name = 'Admin',
+        email = 'admin@gmail.com',
+        password = 'password',
         pin = 11111,
-        firebase_uid = admin_uid,
-        created_at = datetime.now(timezone.utc)
     )
     db.session.add(admin)
     db.session.commit()
 
-    return admin, admin_uid
-
+    return admin
 
 @pytest.fixture(scope = 'session')
-def create_second_admin_user () :
-    admin_uid = generate_firebase_uid()
-    
+def create_second_admin_user () :    
     admin = Admin(
-        name = 'Admin',
+        name = 'Second Admin',
+        email = 'secondadmin@gmail.com',
+        password = 'password',
         pin = 11111,
-        firebase_uid = admin_uid,
-        created_at = datetime.now(timezone.utc)
     )
     db.session.add(admin)
     db.session.commit()
 
-    return admin, admin_uid
+    return admin
+
+@pytest.fixture(scope = 'session')
+def admin_login (flask_app, create_admin_user) :
+    admin = create_admin_user
+
+    response = flask_app.post('/api/admin/login/',
+        json = {
+            'employeeId': admin.employee_id,
+            'password': 'password',
+            'pin': 11111,
+        },
+    )
 
 @pytest.fixture(scope = 'session')
 def create_client_user () :
-    user_uid = generate_firebase_uid()
-
     user = User(
         name = 'Client',
-        firebase_uid = user_uid,
-        created_at = datetime.now(timezone.utc)
+        email = 'client@gmail.com',
+        password = 'password',
     )
     db.session.add(user)
     db.session.commit()
 
-    return user, user_uid
+    return user
 
 @pytest.fixture(scope = 'session')
-def create_second_client_user () :
-    user_uid = generate_firebase_uid()
+def user_login (flask_app, create_client_user) :
+    user = create_client_user
 
-    user = User(
-        name = 'Client',
-        firebase_uid = user_uid,
-        created_at = datetime.now(timezone.utc)
+    flask_app.post('/api/user/login',
+        json = {
+            'email': user.email,
+            'password': 'password',
+            'localStorageCart': None
+        },
     )
-    db.session.add(user)
-    db.session.commit()
-
-    return user, user_uid
