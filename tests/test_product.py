@@ -40,7 +40,7 @@ def test_product_validation(valid_image) :
 
 # controller logic tests
 @pytest.mark.parametrize('role', [Role.SUPER, Role.MANAGER, Role.GENERAL])
-def test_product_creation(flask_app, create_admin_user, admin_login, role) :
+def test_product_creation(flask_app, create_admin_user, admin_login, mock_auth, role) :
     admin_login
     admin = create_admin_user
 
@@ -49,12 +49,7 @@ def test_product_creation(flask_app, create_admin_user, admin_login, role) :
 
     image_path = os.path.join(os.path.dirname(__file__), 'pytestlogo.png')
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
-
+    with mock_auth(admin.id, 'admin') :
         with open(image_path, 'rb') as image_file:
             response = flask_app.post('/api/product/create', 
                 content_type = 'multipart/form-data',
@@ -138,7 +133,7 @@ def test_product_show (flask_app) :
     ( Role.MANAGER, False),
     (Role.GENERAL, None),
 ])
-def test_product_update (flask_app, create_admin_user, admin_login, role, valid_product) :
+def test_product_update (flask_app, create_admin_user, admin_login, mock_auth, role, valid_product) :
     admin_login
     admin = create_admin_user
 
@@ -153,12 +148,7 @@ def test_product_update (flask_app, create_admin_user, admin_login, role, valid_
         'description': 'updated description',
     }
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
-
+    with mock_auth(admin.id, 'admin') :
         response = flask_app.put(f'/api/product/{product_id}/update', data = updated_data)
     
     if role != Role.GENERAL and valid_product :
@@ -183,7 +173,7 @@ def test_product_update (flask_app, create_admin_user, admin_login, role, valid_
     (True, False),
     (False, None)
 ])
-def test_product_update_inventory (flask_app, create_admin_user, admin_login, valid_products, valid_portions) :
+def test_product_update_inventory (flask_app, create_admin_user, admin_login, mock_auth, valid_products, valid_portions) :
     admin_login
     admin = create_admin_user
 
@@ -208,12 +198,7 @@ def test_product_update_inventory (flask_app, create_admin_user, admin_login, va
             '0': { '0': 20 },
         }
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
-        
+    with mock_auth(admin.id, 'admin') :
         response = flask_app.put('/api/product/inventory/update', json = input)
 
     if valid_products and valid_portions :

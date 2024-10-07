@@ -122,3 +122,13 @@ def user_login (flask_app, create_client_user) :
             'localStorageCart': None
         },
     )
+
+@pytest.fixture(scope='session')
+def mock_auth():
+    mock_get_cookie = MagicMock(return_value = 'valid_access_token')
+    mock_decode_jwt = MagicMock()
+
+    with patch('flask.request.cookies.get', mock_get_cookie), \
+        patch('backend.api.utils.token.decode_jwt', mock_decode_jwt) as mock_decode :
+
+        yield mock_decode

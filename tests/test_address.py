@@ -5,7 +5,6 @@ from unittest.mock import patch
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError, DataError
 
-
 from ..database import db
 from ..api.models import Address, Order
 from ..api.models.order import Order_Status, Deliver_Method, Pay_Status
@@ -69,7 +68,7 @@ def seed_addresses (create_client_user) :
     ('John', 'Doe', '000 Robot Street', 'Los Angeles', 'CA', '123', False, False), # invalid zip, too short (integrity error)
     ('John', 'Doe', '111 Robot Street', 'Los Angeles', 'CA', '456789', False, False), # invalid zip, too long (data error)
 ])
-def test_address_validation (flask_app, create_client_user, first_name, last_name, street, city, state, zip, default, valid) :
+def test_address_validation (create_client_user, first_name, last_name, street, city, state, zip, default, valid) :
     # create user
     user = create_client_user
 
@@ -88,7 +87,7 @@ def test_address_validation (flask_app, create_client_user, first_name, last_nam
         assert error.type in (IntegrityError, DataError) # assert IntegrityError
 
 @pytest.mark.parametrize('requesting_default', (True, False))
-def test_get_address (flask_app, create_client_user, user_login, seed_addresses, requesting_default) :
+def test_get_address (flask_app, create_client_user, user_login, mock_auth, seed_addresses, requesting_default) :
     user_login
 
     # create user and get list of addresses
@@ -98,18 +97,13 @@ def test_get_address (flask_app, create_client_user, user_login, seed_addresses,
     # if user requesting default, query param of default=true
     query_params = { 'default': 'true' } if requesting_default else {}
 
-    with patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-        mock_decode_jwt.return_value = {
-            'sub': user.id,
-            'role': 'role'
-        }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.get('/api/address/',
             query_string = query_params,
         )
         assert response.status_code == 200
 
-            # if default=true query param
+        # if default=true query param
         if requesting_default :
             # query for default address, assert that its same as response 
             default_address = Address.query.filter_by(user_id = user.id, default = True).all()
@@ -120,7 +114,7 @@ def test_get_address (flask_app, create_client_user, user_login, seed_addresses,
             assert len(response.json['addresses']) == len(addresses)
 
 @pytest.mark.parametrize('valid_address', [(True), (False)])
-def test_update_default (flask_app, create_client_user, user_login, seed_addresses, valid_address) :
+def test_update_default (flask_app, create_client_user, user_login, mock_auth, seed_addresses, valid_address) :
     user_login
     # create user and get list of addresses
     user = create_client_user
@@ -137,12 +131,7 @@ def test_update_default (flask_app, create_client_user, user_login, seed_address
         # otherwise, initialize id with an invalid id
         address_id = 0
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.put(f'/api/address/default/{address_id}')
 
     if valid_address :
@@ -166,7 +155,7 @@ def test_update_default (flask_app, create_client_user, user_login, seed_address
     (True, False, True), # valid id, not default, used for order --> 400 error, violates not null in order table
     (False, None, None) # invalid id, 404 not found
 ])
-def test_delete_address (flask_app, create_client_user, user_login, seed_addresses, valid_id, is_default, used_for_order) :
+def test_delete_address (flask_app, create_client_user, user_login, mock_auth, seed_addresses, valid_id, is_default, used_for_order) :
     user_login
     
     # create user and get list of addresses
@@ -187,12 +176,7 @@ def test_delete_address (flask_app, create_client_user, user_login, seed_address
     else :
         address_id = 0
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-        
+    with mock_auth(user.id, 'user') :
         response = flask_app.delete(f'/api/address/{address_id}/delete')
 
     if valid_id :

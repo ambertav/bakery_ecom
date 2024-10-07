@@ -63,7 +63,7 @@ def seed_database (create_client_user) :
 
 # testing case of existing address or new address submitted
 @pytest.mark.parametrize('to_create_address', (True, False))
-def test_create_checkout_session (flask_app, create_client_user, user_login, seed_database, to_create_address) :
+def test_create_checkout_session (flask_app, create_client_user, user_login, mock_auth, seed_database, to_create_address) :
     user_login
 
     user = create_client_user
@@ -84,11 +84,7 @@ def test_create_checkout_session (flask_app, create_client_user, user_login, see
         # if not case of new address, use existing
         shipping = address.as_dict()
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
+    with mock_auth(user.id, 'user') :
         response = flask_app.post('/api/order/create-checkout-session',
             json = {
                 'cart': [cart_item.as_dict()],
@@ -107,7 +103,7 @@ def test_create_checkout_session (flask_app, create_client_user, user_login, see
         assert new_address is not None
 
 
-def test_handle_stripe_webhook (flask_app, create_client_user, user_login, seed_database) :
+def test_handle_stripe_webhook (flask_app, create_client_user, user_login, mock_auth, seed_database) :
     user_login
 
     user = create_client_user
@@ -133,12 +129,9 @@ def test_handle_stripe_webhook (flask_app, create_client_user, user_login, seed_
 
     # mock the webhook secret
     with patch.dict(config, {'WEBHOOK_SECRET': 'mock_webhook_secret'}) :
-        with patch('flask.request.cookies.get') as mock_get_cookie, \
-            patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt, \
+        with mock_auth(user.id, 'user'), \
             patch('stripe.Webhook.construct_event') as mock_construct_event :
 
-            mock_get_cookie.return_value = 'valid_access_token'
-            mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
             mock_construct_event.return_value = mock_payload_data
 
             # making request
@@ -162,7 +155,7 @@ def test_handle_stripe_webhook (flask_app, create_client_user, user_login, seed_
 
 
 @pytest.mark.parametrize('requesting_recents', (True, False))
-def test_order_history (flask_app, create_client_user, user_login, seed_database, requesting_recents) :
+def test_order_history (flask_app, create_client_user, user_login, mock_auth,seed_database, requesting_recents) :
     user_login
 
     user = create_client_user
@@ -176,12 +169,7 @@ def test_order_history (flask_app, create_client_user, user_login, seed_database
     # if user is requesting most recent orders, query param of recent=true
     query_params = { 'recent': 'true' } if requesting_recents else {}
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-        
+    with mock_auth(user.id, 'user') :
         response = flask_app.get('/api/order/', query_string = query_params)
 
     assert response.status_code in [200, 308]
@@ -198,7 +186,7 @@ def test_order_history (flask_app, create_client_user, user_login, seed_database
 
 
 # show order
-def test_show_order (flask_app, create_client_user, user_login) :
+def test_show_order (flask_app, create_client_user, user_login, mock_auth) :
     user_login
 
     user = create_client_user
@@ -212,12 +200,7 @@ def test_show_order (flask_app, create_client_user, user_login) :
     order_dict = order.as_dict()
     order_dict['totalPrice'] = str(order_dict['totalPrice'])
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.get(f'/api/order/{order.id}')
 
     assert response.status_code in [200, 308]
@@ -232,7 +215,7 @@ def test_show_order (flask_app, create_client_user, user_login) :
     ('in-progress', True, False),
     ('in-progress', False, True),
 ])
-def test_order_fulfillment (flask_app, create_admin_user, admin_login, status, is_filter, is_search) :
+def test_order_fulfillment (flask_app, create_admin_user, admin_login, mock_auth, status, is_filter, is_search) :
     admin_login
     
     admin = create_admin_user
@@ -248,12 +231,7 @@ def test_order_fulfillment (flask_app, create_admin_user, admin_login, status, i
     # format query params for request
     query_params = { key: value for key, value in [('delivery-method', delivery_param), ('search', search_param)] if value is not None }
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
-        
+    with mock_auth(admin.id, 'admin') :
         response = flask_app.get(f'/api/order/fulfillment/{status}/',
             query_string = query_params,
         )
@@ -296,7 +274,7 @@ def test_order_fulfillment (flask_app, create_admin_user, admin_login, status, i
     (True, False), # batch input with one or more invalid ids --> 500
     (True, True), # batch input with all valid ids --> 200
 ])
-def test_start_orders (flask_app, create_admin_user, admin_login, is_batch, is_valid) :
+def test_start_orders (flask_app, create_admin_user, admin_login, mock_auth, is_batch, is_valid) :
     admin_login
 
     admin = create_admin_user
@@ -325,16 +303,10 @@ def test_start_orders (flask_app, create_admin_user, admin_login, is_batch, is_v
             # if invalid data test case, just create a list of a random invalid number
             id_list = [random.randint(1, 10)]
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin.id, 'role': 'admin' }
-
+    with mock_auth(admin.id, 'admin') :
         response = flask_app.put(f'/api/order/fulfillment/set-in-progress/',
             json = id_list # passing in list of ids or both single and batch test cases
         )
-
 
     if is_valid :
         assert response.status_code == 200
@@ -369,7 +341,7 @@ def test_start_orders (flask_app, create_admin_user, admin_login, is_batch, is_v
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, admin_login, valid_admin, valid_order, valid_status) :
+def test_return_order_to_pending (flask_app, create_admin_user, create_second_admin_user, admin_login, mock_auth, valid_admin, valid_order, valid_status) :
     admin_login
 
     admin = create_admin_user
@@ -393,12 +365,7 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
 
     admin_id = admin.id if valid_admin else second_admin.id
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin_id, 'role': 'admin' }
-
+    with mock_auth(admin_id, 'admin') :
         response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-pending/')
 
     if valid_order :
@@ -432,7 +399,7 @@ def test_return_order_to_pending (flask_app, create_admin_user, create_second_ad
     (True, True, False), # invalid --> 400, order has to be in progress
     (False, None, None), # invalid --> 403 forbidden, task not associated with requesting admin
 ])
-def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, admin_login, valid_admin, valid_order, valid_status) :
+def test_complete_order_fulfillment (flask_app, create_admin_user, create_second_admin_user, admin_login, mock_auth, valid_admin, valid_order, valid_status) :
     admin_login
 
     admin = create_admin_user
@@ -456,12 +423,7 @@ def test_complete_order_fulfillment (flask_app, create_admin_user, create_second
 
     admin_id = admin.id if valid_admin else second_admin.id
     
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': admin_id, 'role': 'admin' }
-
+    with mock_auth(admin_id, 'admin') :
         response = flask_app.put(f'/api/order/fulfillment/{order_id}/set-complete/')
 
     if valid_order :

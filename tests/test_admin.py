@@ -54,7 +54,7 @@ def test_is_password_expired (flask_app, create_admin_user) :
     assert admin.is_password_expired() is True
 
 
-def test_renew_password (flask_app, create_admin_user) :
+def test_renew_password (create_admin_user) :
     # created with password = 'password'
     admin = create_admin_user
 

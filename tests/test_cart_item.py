@@ -48,7 +48,7 @@ def seed_products () :
 
 # creating cart item, scenario: logged in + adding to cart
 @pytest.mark.parametrize('valid_product', [True, False])
-def test_cart_item_creation (flask_app, user_login, create_client_user, seed_products, valid_product) :
+def test_cart_item_creation (flask_app, create_client_user, user_login, mock_auth, seed_products, valid_product) :
     user_login
 
     user = create_client_user
@@ -61,12 +61,7 @@ def test_cart_item_creation (flask_app, user_login, create_client_user, seed_pro
         id = 0
         portion_id = 0
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.post('/api/cart/add', 
             json = { 
                 'id': id,
@@ -85,7 +80,7 @@ def test_cart_item_creation (flask_app, user_login, create_client_user, seed_pro
 
 
 # creating cart item, scenario: user has items in cart and then logs in / signs up
-def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_products) :
+def test_auto_cart_item_creation_on_login (flask_app, create_client_user, mock_auth, seed_products) :
     user = create_client_user
     products = seed_products
 
@@ -110,12 +105,7 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
         },
     ]
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.post('/api/user/login', 
             json = {
                 'email': user.email,
@@ -141,18 +131,13 @@ def test_auto_cart_item_creation_on_login (flask_app, create_client_user, seed_p
         assert cart_items[i].quantity == expected_quantity
 
 
-def test_view_cart (flask_app, create_client_user, user_login) :
+def test_view_cart (flask_app, create_client_user, user_login, mock_auth) :
     user_login
 
     user = create_client_user
     cart_items = Cart_Item.query.filter_by(user_id = user.id).all()
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.get('/api/cart/')
 
         assert response.status_code == 200
@@ -168,7 +153,7 @@ def test_view_cart (flask_app, create_client_user, user_login) :
     (False, None), # invalid id --> 404
     (True, -1), # valid id, invalid qty --> 500
 ])
-def test_update_cart_item_quantity (flask_app, create_client_user, user_login, valid_id, new_qty) :
+def test_update_cart_item_quantity (flask_app, create_client_user, user_login, mock_auth, valid_id, new_qty) :
     user_login
 
     user = create_client_user
@@ -176,12 +161,7 @@ def test_update_cart_item_quantity (flask_app, create_client_user, user_login, v
 
     item_id = cart_items[0].id if valid_id else 0
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.put(f'/api/cart/{item_id}/update', 
             json = { 'newQty': new_qty },
         )
@@ -212,7 +192,7 @@ def test_update_cart_item_quantity (flask_app, create_client_user, user_login, v
     (True), # valid id, cart item exists --> will be deleted
     (False) # invalid id, cart item does not exist --> 404
 ])
-def test_delete_cart_item (flask_app, create_client_user, user_login, valid_id) :
+def test_delete_cart_item (flask_app, create_client_user, user_login, mock_auth, valid_id) :
     user_login
 
     user = create_client_user
@@ -222,12 +202,7 @@ def test_delete_cart_item (flask_app, create_client_user, user_login, valid_id) 
 
     item_id = cart_items[0].id if valid_id else 0
 
-    with patch('flask.request.cookies.get') as mock_get_cookie, \
-        patch('backend.api.utils.token.decode_jwt') as mock_decode_jwt :
-
-        mock_get_cookie.return_value = 'valid_access_token'
-        mock_decode_jwt.return_value = { 'sub': user.id, 'role': 'user' }
-
+    with mock_auth(user.id, 'user') :
         response = flask_app.delete(f'/api/cart/{item_id}/delete')
 
     if valid_id :
